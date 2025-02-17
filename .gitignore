@@ -179,3 +179,10 @@ poetry.toml
 pyrightconfig.json
 
 # End of https://www.toptal.com/developers/gitignore/api/python
+
+# Project-specific
+/benchmark/ex1/mf6rtm
+/benchmark/ex2/mf6rtm
+/benchmark/ex3/mf6rtm
+/benchmark/ex4/mf6rtm
+/benchmark/ex5/mf6rtm
