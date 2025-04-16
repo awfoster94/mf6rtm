@@ -24,6 +24,8 @@ dependencies:
   # - defusedxml
   # - geojson
   # - pyvista # interface for Visualization Toolkit (VTK)
+  - jupytext # for pairing examples with jupyter notebooks
+
 
   # PhreeqcRM and dependencies
   - phreeqcrm
@@ -39,7 +41,6 @@ dependencies:
   - ipympl  # jupyter-matplotlib, https://github.com/matplotlib/ipympl
   - ipywidgets  # Interactive HTML widgets for Jupyter
   - pyviz_comms # bidirectional communication between Python & JavaScript for Jupyter
-  - jupytext
 
   # Dev tools: Language Server Protocol (LSP) (Optional), for...
     # code navigation + hover suggestions + linters + autocompletion + rename

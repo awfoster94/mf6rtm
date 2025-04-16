@@ -1,38 +1,35 @@
+"""
+The mf6rtm.mup3d module provides a wrapper for PhreeqcRM.
+"""
+
 from pathlib import Path
 import os
 import warnings
 warnings.filterwarnings("ignore")
 warnings.filterwarnings("ignore", category=DeprecationWarning)
+from typing import Union
 import pandas as pd
 import numpy as np
 import phreeqcrm
-from mf6rtm.mf6rtm import solve, concentration_l_to_m3
+from mf6rtm.mf6rtm import solve, concentration_l_to_m3, DT_FMT, time_units_dic
 from . import utils
 from phreeqcrm import yamlphreeqcrm
 import yaml
 
-# global variables
-DT_FMT = "%Y-%m-%d %H:%M:%S"
-
-time_units_dic = {
-    'seconds': 1,
-    'minutes': 60,
-    'hours': 3600,
-    'days': 86400,
-    'years': 31536000,
-    'unknown': 1 # if unknown assume seconds
-}
-
 
 class Block:
-    def __init__(self, data, ic=None) -> None:
+    def __init__(
+        self, 
+        data: dict, 
+        ic: Union[int, float, np.ndarray, None] = None,
+    ) -> None:
         self.data = data
         self.names = [key for key in data.keys()]
         self.ic = ic  # None means no initial condition (-1)
         self.eq_solutions = []
         self.options = []
 
-    def set_ic(self, ic):
+    def set_ic(self, ic: Union[int, float, np.ndarray]):
         '''Set the initial condition for the block.
         '''
         assert isinstance(ic, (int, float, np.ndarray)), 'ic must be an int, float or ndarray'
@@ -432,7 +429,6 @@ class Mup3d(object):
             ic1[:, 3] = np.reshape(self.surfaces_phases.ic, self.ncpl)  # Surface
         ic1[:, 4] = -1  # Gas phase
         ic1[:, 5] = -1  # Solid solutions
-
         if isinstance(self.kinetic_phases, KineticPhases):
             ic1[:, 6] = np.reshape(self.kinetic_phases.ic, self.ncpl)  # Kinetics
 
