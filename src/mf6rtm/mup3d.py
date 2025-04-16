@@ -551,9 +551,9 @@ class Mup3d(object):
 
         assert len(chem_stress) > 0, 'No ChemStress attribute found in self'
 
+        # Get total number of grid cells affected by the stress period
         nxyz = len(getattr(self, attr).sol_spd)
-        # TODO: change `nxyz` here to `sol_spd_count`, 
-        #       to reserve `nxyz` for total number of grid cells in domain
+
         phreeqc_rm = phreeqcrm.PhreeqcRM(nxyz, nthreads)
         status = phreeqc_rm.SetComponentH2O(False)
         phreeqc_rm.UseSolutionDensityVolume(False)
