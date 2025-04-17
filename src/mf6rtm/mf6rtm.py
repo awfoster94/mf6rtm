@@ -1,4 +1,4 @@
-"""The mf6rtm module provides the Mf6RTM class that couples modflowapi and 
+"""The mf6rtm module provides the Mf6RTM class that couples modflowapi and
 phreeqcrm.
 """
 from pathlib import Path
@@ -740,4 +740,3 @@ def run_cmd():
     cwd = os.getcwd()
     # run the solve function
     solve(cwd)
-

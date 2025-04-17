@@ -20,9 +20,9 @@ class Block:
     """Base class for PHREEQC input "keyword data blocks".
 
     Attributes:
-        data: A dictionary of geochemical components (keys) and their total 
+        data: A dictionary of geochemical components (keys) and their total
             concentrations (list) indexed by block number, similar to a .pqi file.
-        names: A list of names of geochemical components that serve as keys to 
+        names: A list of names of geochemical components that serve as keys to
             the data.
         ic: initial condition.
         eq_solutions: list of equilibrium solutions.
@@ -30,14 +30,14 @@ class Block:
 
     """
     def __init__(
-        self, 
-        data: dict, 
+        self,
+        data: dict,
         ic: Union[int, float, np.ndarray, None] = None,
     ) -> None:
         """Initialize a Block instance with inputs from a PHREEQC data block.
 
         Args:
-            data: PHREEQC components (keys) and their total concentrations (list) 
+            data: PHREEQC components (keys) and their total concentrations (list)
                 indexed by block number, similar to a .pqi file.
             ic: Initial condition concentrations. Defaults to None.
         """
@@ -123,7 +123,7 @@ phase_types = {
 class Mup3d(object):
     """The Mup3d class provides a wrapper for a PhreeqcRM model object and
      its inputs.
-    
+
     Attributes:
         name (str): Name of the model.
         wd (str): Working directory path.
@@ -137,7 +137,7 @@ class Mup3d(object):
         surfaces_phases (Surfaces): Surface phases in the model.
         postfix (str): Postfix for the output files.
         phreeqc_rm (object): PHREEQC reactive transport model instance.
-        sconc (dict[str, np.ndarray]): Dictionary of concentrations in units of 
+        sconc (dict[str, np.ndarray]): Dictionary of concentrations in units of
             moles per m^3 and structured to match the shape of Modflow's grid
         phinp (object): PHREEQC input instance.
         components (list): List of chemical components.
@@ -149,12 +149,12 @@ class Mup3d(object):
 
     """
     def __init__(
-        self, 
-        name: Union[int, None] = None, 
+        self,
+        name: Union[int, None] = None,
         solutions: Union[Solutions, None] = None,
-        nlay: Union[int, None] = None, 
-        nrow: Union[int, None] = None, 
-        ncol: Union[int, None] = None, 
+        nlay: Union[int, None] = None,
+        nrow: Union[int, None] = None,
+        ncol: Union[int, None] = None,
     ):
         """Initializes a Mup3d instance with the given parameters.
 
@@ -425,17 +425,17 @@ class Mup3d(object):
 
     def initialize(self, nthreads=1):
         '''Initialize a PhreeqcRM object to calculate initial concentrations
-        from a PHREEQC inputs, adding the following attributes to the Mup3d 
+        from a PHREEQC inputs, adding the following attributes to the Mup3d
         object:
 
         self.components: list of transportable components
-        self.init_conc_array_phreeqc: A 1D array of concentrations (mol/L) 
-            structured for PhreeqcRM, with each component conc for each grid 
+        self.init_conc_array_phreeqc: A 1D array of concentrations (mol/L)
+            structured for PhreeqcRM, with each component conc for each grid
             cell ordered by `model.components`
         self.sconc: A dictionary with components as keys and values as an array
             of concentrations (mol/m^3) structured to match the shape of the
             Modflow6 model domain grid
-        
+
         and others...
         '''
         # get model dis info
@@ -582,11 +582,11 @@ class Mup3d(object):
         ncomps = phreeqc_rm.FindComponents()
         components = list(phreeqc_rm.GetComponents())
 
-        # Transfer solutions and reactants from the InitialPhreeqc instance to 
+        # Transfer solutions and reactants from the InitialPhreeqc instance to
         # the reaction-module workers. See https://usgs-coupled.github.io/phreeqcrm/namespacephreeqcrm.html#ac3d7e7db76abda97a3d11b3ff1903322
         ic1 = [-1] * nxyz * 7
         for e, i in enumerate(getattr(self, attr).sol_spd):
-            # TODO: modify to conform to the index, element convention 
+            # TODO: modify to conform to the index, element convention
             #       (i and e are reversed in line above)
             ic1[e] = i  # Solution 1
             # TODO: implment other ic1 blocks
