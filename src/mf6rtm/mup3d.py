@@ -1,38 +1,53 @@
+"""The mup3d module provides a wrapper for PHRREQC Inputs.
+"""
+
 from pathlib import Path
 import os
 import warnings
 warnings.filterwarnings("ignore")
 warnings.filterwarnings("ignore", category=DeprecationWarning)
+from typing import Union
 import pandas as pd
 import numpy as np
 import phreeqcrm
-from mf6rtm.mf6rtm import solve, concentration_l_to_m3
+from mf6rtm.mf6rtm import solve, concentration_l_to_m3, DT_FMT, time_units_dic
 from . import utils
 from phreeqcrm import yamlphreeqcrm
 import yaml
 
-# global variables
-DT_FMT = "%Y-%m-%d %H:%M:%S"
-
-time_units_dic = {
-    'seconds': 1,
-    'minutes': 60,
-    'hours': 3600,
-    'days': 86400,
-    'years': 31536000,
-    'unknown': 1 # if unknown assume seconds
-}
-
 
 class Block:
-    def __init__(self, data, ic=None) -> None:
+    """Base class for PHREEQC input "keyword data blocks".
+
+    Attributes:
+        data: A dictionary of geochemical components (keys) and their total
+            concentrations (list) indexed by block number, similar to a .pqi file.
+        names: A list of names of geochemical components that serve as keys to
+            the data.
+        ic: initial condition.
+        eq_solutions: list of equilibrium solutions.
+        options: list of options.
+
+    """
+    def __init__(
+        self,
+        data: dict,
+        ic: Union[int, float, np.ndarray, None] = None,
+    ) -> None:
+        """Initialize a Block instance with inputs from a PHREEQC data block.
+
+        Args:
+            data: PHREEQC components (keys) and their total concentrations (list)
+                indexed by block number, similar to a .pqi file.
+            ic: Initial condition concentrations. Defaults to None.
+        """
         self.data = data
         self.names = [key for key in data.keys()]
         self.ic = ic  # None means no initial condition (-1)
         self.eq_solutions = []
         self.options = []
 
-    def set_ic(self, ic):
+    def set_ic(self, ic: Union[int, float, np.ndarray]):
         '''Set the initial condition for the block.
         '''
         assert isinstance(ic, (int, float, np.ndarray)), 'ic must be an int, float or ndarray'
@@ -54,6 +69,7 @@ class GasPhase(Block):
 
 
 class Solutions(Block):
+    """The Solutions Block."""
     def __init__(self, data) -> None:
         super().__init__(data)
 
@@ -105,7 +121,55 @@ phase_types = {
 
 
 class Mup3d(object):
-    def __init__(self, name=None, solutions=None, nlay=None, nrow=None, ncol=None):
+    """The Mup3d class provides a wrapper for a PhreeqcRM model object and
+     its inputs.
+
+    Attributes:
+        name (str): Name of the model.
+        wd (str): Working directory path.
+        charge_offset (float): Charge offset, initialized to 0.0.
+        database (str): Path to the PHREEQC database file.
+        solutions (Solutions): Solutions instance containing the geochemical data.
+        init_temp (float): Initial temperature, default is 25.0.
+        equilibrium_phases (EquilibriumPhases): Equilibrium phases in the model.
+        kinetic_phases (KineticPhases): Kinetic phases in the model.
+        exchange_phases (ExchangePhases): Exchange phases in the model.
+        surfaces_phases (Surfaces): Surface phases in the model.
+        postfix (str): Postfix for the output files.
+        phreeqc_rm (object): PHREEQC reactive transport model instance.
+        sconc (dict[str, np.ndarray]): Dictionary of concentrations in units of
+            moles per m^3 and structured to match the shape of Modflow's grid
+        phinp (object): PHREEQC input instance.
+        components (list): List of chemical components.
+        fixed_components (list): List of fixed components.
+        nlay (int): Number of layers in the model.
+        nrow (int): Number of rows in the model.
+        ncol (int): Number of columns in the model.
+        ncpl (int): Total number of cells in the model (nlay * nrow * ncol).
+
+    """
+    def __init__(
+        self,
+        name: Union[int, None] = None,
+        solutions: Union[Solutions, None] = None,
+        nlay: Union[int, None] = None,
+        nrow: Union[int, None] = None,
+        ncol: Union[int, None] = None,
+    ):
+        """Initializes a Mup3d instance with the given parameters.
+
+        Args:
+            name (str, optional): The name of the model. Defaults to None.
+            solutions (Solutions, optional): Instance of the Solutions class containing
+                the geochemical data. Required if name is not an instance of Solutions.
+            nlay (int, optional): Number of layers in the model. Required.
+            nrow (int, optional): Number of rows in the model. Required.
+            ncol (int, optional): Number of columns in the model. Required.
+
+        Raises:
+            ValueError: If solutions is not provided.
+            ValueError: If any of nlay, nrow, or ncol is not provided.
+        """
         if solutions is None and isinstance(name, Solutions):
             # New style: first argument is solutions
             solutions = name
@@ -360,8 +424,19 @@ class Mup3d(object):
         return script
 
     def initialize(self, nthreads=1):
-        '''Initialize a solution with phreeqcrm and returns a dictionary with components as keys and
-            concentration array in moles/m3 as items
+        '''Initialize a PhreeqcRM object to calculate initial concentrations
+        from a PHREEQC inputs, adding the following attributes to the Mup3d
+        object:
+
+        self.components: list of transportable components
+        self.init_conc_array_phreeqc: A 1D array of concentrations (mol/L)
+            structured for PhreeqcRM, with each component conc for each grid
+            cell ordered by `model.components`
+        self.sconc: A dictionary with components as keys and values as an array
+            of concentrations (mol/m^3) structured to match the shape of the
+            Modflow6 model domain grid
+
+        and others...
         '''
         # get model dis info
         # dis = sim.get_model(sim.model_names[0]).dis
@@ -432,7 +507,6 @@ class Mup3d(object):
             ic1[:, 3] = np.reshape(self.surfaces_phases.ic, self.ncpl)  # Surface
         ic1[:, 4] = -1  # Gas phase
         ic1[:, 5] = -1  # Solid solutions
-
         if isinstance(self.kinetic_phases, KineticPhases):
             ic1[:, 6] = np.reshape(self.kinetic_phases.ic, self.ncpl)  # Kinetics
 
@@ -455,6 +529,7 @@ class Mup3d(object):
         self.sconc = {}
 
         for e, c in enumerate(components):
+            # TODO: modify to conform to the index, element convention
             get_conc = np.reshape(conc[e], (self.nlay, self.nrow, self.ncol))
             get_conc = concentration_l_to_m3(get_conc)
             if c.lower() == 'charge':
@@ -476,7 +551,9 @@ class Mup3d(object):
 
         assert len(chem_stress) > 0, 'No ChemStress attribute found in self'
 
+        # Get total number of grid cells affected by the stress period
         nxyz = len(getattr(self, attr).sol_spd)
+
         phreeqc_rm = phreeqcrm.PhreeqcRM(nxyz, nthreads)
         status = phreeqc_rm.SetComponentH2O(False)
         phreeqc_rm.UseSolutionDensityVolume(False)
@@ -505,9 +582,14 @@ class Mup3d(object):
         ncomps = phreeqc_rm.FindComponents()
         components = list(phreeqc_rm.GetComponents())
 
+        # Transfer solutions and reactants from the InitialPhreeqc instance to
+        # the reaction-module workers. See https://usgs-coupled.github.io/phreeqcrm/namespacephreeqcrm.html#ac3d7e7db76abda97a3d11b3ff1903322
         ic1 = [-1] * nxyz * 7
         for e, i in enumerate(getattr(self, attr).sol_spd):
+            # TODO: modify to conform to the index, element convention
+            #       (i and e are reversed in line above)
             ic1[e] = i  # Solution 1
+            # TODO: implment other ic1 blocks
             # ic1[nxyz + i]     = -1  # Equilibrium phases none
             # ic1[2 * nxyz + i] =  -1  # Exchange 1
             # ic1[3 * nxyz + i] = -1  # Surface none
