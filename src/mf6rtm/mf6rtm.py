@@ -1,3 +1,6 @@
+"""The mf6rtm module provides the Mf6RTM class that couples modflowapi and
+phreeqcrm.
+"""
 from pathlib import Path
 import os
 import warnings
@@ -213,6 +216,7 @@ class PhreeqcBMI(phreeqcrm.BMIPhreeqcRM):
 
 class Mf6API(modflowapi.ModflowApi):
     def __init__(self, wd, dll):
+        # TODO: reverse the order of args to match modflowapi?
         modflowapi.ModflowApi.__init__(self, dll, working_directory=wd)
         self.initialize()
         self.sim = flopy.mf6.MFSimulation.load(sim_ws=wd, verbosity_level=0)
@@ -729,3 +733,10 @@ def concentration_volbulk_to_volwater(conc_volbulk, porosity):
     '''
     conc_volwater = conc_volbulk*(1/porosity)
     return conc_volwater
+
+
+def run_cmd():
+    # get the current directory
+    cwd = os.getcwd()
+    # run the solve function
+    solve(cwd)
