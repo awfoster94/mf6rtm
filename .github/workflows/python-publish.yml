@@ -26,7 +26,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install build twine
-          
+
+      - name: Update version in setup.cfg
+        run: |
+          # Get the release tag (removes 'v' prefix if present)
+          VERSION=${GITHUB_REF#refs/tags/v}
+          # Update setup.cfg with new version
+          sed -i "s/^version = .*/version = ${VERSION}/" setup.cfg
+            
       - name: Build and publish
         run: |
           python -m pip install -e .  # Install in development mode
