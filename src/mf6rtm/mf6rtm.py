@@ -5,20 +5,17 @@ phreeqcrm.
 from pathlib import Path
 import os
 import warnings
+from datetime import datetime
 
 warnings.filterwarnings("ignore")
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 from PIL import Image
 import pandas as pd
 import numpy as np
-import flopy
-import phreeqcrm
-import modflowapi
-
-# from modflowapi.extensions import ApiSimulation
-from datetime import datetime
 
 # from time import sleep
+from .modflow import Mf6API
+from .phreeqc import PhreeqcBMI
 from . import utils
 
 
@@ -122,188 +119,8 @@ def determine_grid_type(sim):
     return distype
 
 
-class PhreeqcBMI(phreeqcrm.BMIPhreeqcRM):
-
-    def __init__(self, yaml="mf6rtm.yaml"):
-        phreeqcrm.BMIPhreeqcRM.__init__(self)
-        self.initialize(yaml)
-        self.sat_now = None
-
-    def get_grid_to_map(self):
-        """Function to get grid to map"""
-        return self.GetGridToMap()
-
-    def _prepare_phreeqcrm_bmi(self):
-        """Prepare phreeqc bmi for reaction calculations"""
-        self.SetScreenOn(True)
-        self.set_scalar("NthSelectedOutput", 0)
-        sout_headers = self.GetSelectedOutputHeadings()
-        soutdf = pd.DataFrame(columns=sout_headers)
-
-        # set attributes
-        self.components = self.get_value_ptr("Components")
-        self.ncomps = len(self.components)
-        self.soutdf = soutdf
-        self.sout_headers = sout_headers
-
-    def _set_ctime(self, ctime):
-        """Set the current time in phreeqc bmi"""
-        # self.ctime = self.SetTime(ctime*86400)
-        self.ctime = ctime
-
-    def set_scalar(self, var_name, value):
-        itemsize = self.get_var_itemsize(var_name)
-        nbytes = self.get_var_nbytes(var_name)
-        dim = nbytes // itemsize
-
-        if dim != 1:
-            raise ValueError(f"{var_name} is not a scalar")
-
-        vtype = self.get_var_type(var_name)
-        dest = np.empty(1, dtype=vtype)
-        dest[0] = value
-        x = self.set_value(var_name, dest)
-
-    def _solve_phreeqcrm(self, dt, diffmask):
-        """Function to solve phreeqc bmi"""
-        # status = phreeqc_rm.SetTemperature([self.init_temp[0]] * self.ncpl)
-        # status = phreeqc_rm.SetPressure([2.0] * nxyz)
-        self.SetTimeStep(dt * 1.0 / self.GetTimeConversion())
-
-        if self.sat_now is not None:
-            sat = self.sat_now
-        else:
-            sat = [1] * self.GetGridCellCount()
-
-        self.SetSaturation(sat)
-
-        # update which cells to run depending on conc change between tsteps
-        if diffmask is not None:
-            # get idx where diffmask is 0
-            inact = get_indices(0, diffmask)
-            if len(inact) > 0:
-                for i in inact:
-                    sat[i] = 0
-            print(
-                f"{'Cells sent to reactions':<25} | {self.GetGridCellCount()-len(inact):<0}/{self.GetGridCellCount():<15}"
-            )
-            self.SetSaturation(sat)
-
-        print_selected_output_on = True
-        # print_chemistry_on = False
-        status = self.SetSelectedOutputOn(print_selected_output_on)
-        status = self.SetPrintChemistryOn(False, False, False)
-        # reactions loop
-        sol_start = datetime.now()
-
-        message = f"{'Reaction loop':<25} | {'Stress period:':<15} {self.kper:<5} | {'Time step:':<15} {self.kstp:<10} | {'Running ...':<10}"
-        self.LogMessage(message + "\n")  # log message
-        print(message)
-        # self.ScreenMessage(message)
-        # status = self.RunCells()
-        # if status < 0:
-        #     print('Error in RunCells: {0}'.format(status))
-        self.update()
-        td = (datetime.now() - sol_start).total_seconds() / 60.0
-        message = f"{'Reaction loop':<25} | {'Stress period:':<15} {self.kper:<5} | {'Time step:':<15} {self.kstp:<10} | {'Completed in :':<10} {td//60:.0f} min {td%60:.4f} sec\n\n"
-        self.LogMessage(message)
-        print(message)
-        # self.ScreenMessage(message)
-
-    def _get_kper_kstp_from_mf6api(self, mf6api):
-        """Function to get the kper and kstp from mf6api"""
-        assert isinstance(mf6api, Mf6API), "mf6api must be an instance of Mf6API"
-        self.kper = mf6api.kper
-        self.kstp = mf6api.kstp
-        return
-
-
-class Mf6API(modflowapi.ModflowApi):
-    def __init__(self, wd, dll):
-        # TODO: reverse the order of args to match modflowapi?
-        modflowapi.ModflowApi.__init__(self, dll, working_directory=wd)
-        self.initialize()
-        self.sim = flopy.mf6.MFSimulation.load(sim_ws=wd, verbosity_level=0)
-        self.fmi = False
-
-    def _prepare_mf6(self):
-        """Prepare mf6 bmi for transport calculations"""
-        self.modelnmes = [nme.capitalize() for nme in self.sim.model_names]
-        self.components = [nme.capitalize() for nme in self.sim.model_names[1:]]
-        self.nsln = self.get_subcomponent_count()
-        self.sim_start = datetime.now()
-        self.ctimes = [0.0]
-        self.num_fails = 0
-
-    def _check_fmi(self):
-        """Check if fmi is in the nam file"""
-        ...
-        return
-
-    def _set_simtype_gwt(self):
-        """Set the gwt sim type as sequential or flow interface"""
-        ...
-
-    def _solve_gwt(self):
-        """Function to solve the transport loop"""
-        # prep to solve
-        for sln in range(1, self.nsln + 1):
-            self.prepare_solve(sln)
-        # the one-based stress period number
-        stress_period = self.get_value(self.get_var_address("KPER", "TDIS"))[0]
-        time_step = self.get_value(self.get_var_address("KSTP", "TDIS"))[0]
-
-        self.kper = stress_period
-        self.kstp = time_step
-        msg = f"{'Transport loop':<25} | {'Stress period:':<15} {stress_period:<5} | {'Time step:':<15} {time_step:<10} | {'Running ...':<10}"
-        print(msg)
-        # mf6 transport loop block
-        for sln in range(1, self.nsln + 1):
-            # if self.fixed_components is not None and modelnmes[sln-1] in self.fixed_components:
-            #     print(f'not transporting {modelnmes[sln-1]}')
-            #     continue
-
-            # set iteration counter
-            kiter = 0
-            # max number of solution iterations
-            max_iter = self.get_value(
-                self.get_var_address("MXITER", f"SLN_{sln}")
-            )  # FIXME: not sure to define this inside the loop
-            self.prepare_solve(sln)
-
-            sol_start = datetime.now()
-            while kiter < max_iter:
-                convg = self.solve(sln)
-                if convg:
-                    td = (datetime.now() - sol_start).total_seconds() / 60.0
-                    break
-                kiter += 1
-            if not convg:
-                td = (datetime.now() - sol_start).total_seconds() / 60.0
-                print(
-                    "\nTransport stress period: {0} --- time step: {1} --- did not converge with {2} iters --- took {3:10.5G} mins".format(
-                        stress_period, time_step, kiter, td
-                    )
-                )
-                self.num_fails += 1
-            try:
-                self.finalize_solve(sln)
-            except:
-                pass
-        td = (datetime.now() - sol_start).total_seconds() / 60.0
-        print(
-            f"{'Transport loop':<25} | {'Stress period:':<15} {stress_period:<5} | {'Time step:':<15} {time_step:<10} | {'Completed in :':<10}  {td//60:.0f} min {td%60:.4f} sec"
-        )
-
-    def _check_num_fails(self):
-        if self.num_fails > 0:
-            print("\nTransport failed to converge {0} times \n".format(self.num_fails))
-        else:
-            print("\nTransport converged successfully without any fails")
-
-
 class Mf6RTM(object):
-    def __init__(self, wd, mf6api, phreeqcbmi):
+    def __init__(self, wd, mf6api: Mf6API, phreeqcbmi: PhreeqcBMI) -> None:
         assert isinstance(mf6api, Mf6API), "MF6API must be an instance of Mf6API"
         assert isinstance(
             phreeqcbmi, PhreeqcBMI
@@ -474,7 +291,7 @@ class Mf6RTM(object):
 
     def _check_inactive_cells_exist(self, diffmask):
         """Function to check if inactive cells exist in the concentration array"""
-        inact = get_indices(0, diffmask)
+        inact = utils.get_indices(0, diffmask)
         if len(inact) > 0:
             return True
         else:
@@ -540,7 +357,7 @@ class Mf6RTM(object):
         """Function to replace inactive cells in the selected output dataframe"""
         # match headers in components closest string
 
-        inactive_idx = get_indices(0, diffmask)
+        inactive_idx = utils.get_indices(0, diffmask)
 
         sout[:, inactive_idx] = self._sout_k[:, inactive_idx]
         return sout
@@ -675,10 +492,6 @@ class Mf6RTM(object):
             print("MR BEAKER IMPORTANT MESSAGE: SOMETHING WENT WRONG. BUMMER\n")
             pass
         return success
-
-
-def get_indices(element, lst):
-    return [i for i, x in enumerate(lst) if x == element]
 
 
 def get_less_than_zero_idx(arr):
