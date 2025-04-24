@@ -14,7 +14,7 @@ import pandas as pd
 import numpy as np
 
 # from time import sleep
-from mf6rtm.modflow import Mf6API
+from mf6rtm.mf6api import Mf6API
 from mf6rtm.phreeqc import PhreeqcBMI
 from mf6rtm import utils
 from mf6rtm.discretization import total_cells_in_grid

@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 import phreeqcrm
 
-from mf6rtm import utils
-from mf6rtm.mf6api import Mf6API
+from . import utils
+from .modflow import Mf6API
 
 
 class PhreeqcBMI(phreeqcrm.BMIPhreeqcRM):
