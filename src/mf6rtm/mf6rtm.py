@@ -14,10 +14,10 @@ import pandas as pd
 import numpy as np
 
 # from time import sleep
-from .modflow import Mf6API
-from .phreeqc import PhreeqcBMI
-from . import utils
-
+from mf6rtm.modflow import Mf6API
+from mf6rtm.phreeqc import PhreeqcBMI
+from mf6rtm import utils
+from mf6rtm.discretization import total_cells_in_grid
 
 # global variables
 DT_FMT = "%Y-%m-%d %H:%M:%S"
@@ -91,34 +91,6 @@ def set_nthread_yaml(yamlfile, nthread=1):
     return
 
 
-def get_mf6_dis(sim):
-    """Function to extract dis from modflow6 sim object"""
-    dis = sim.get_model(sim.model_names[0]).dis
-    nlay = dis.nlay.get_data()
-    nrow = dis.nrow.get_data()
-    ncol = dis.ncol.get_data()
-    return nlay, nrow, ncol
-
-
-def calc_nxyz_from_dis(sim):
-    """Function to calculate number of cells from dis object"""
-    nlay, nrow, ncol = get_mf6_dis(sim)
-    return nlay * nrow * ncol
-
-
-def get_mf6_disv(sim):
-    # TODO: implement this function
-    ...
-
-
-def determine_grid_type(sim):
-    """Function to determine the grid type of the model"""
-    # get the grid type
-    mf6 = sim.get_model(sim.model_names[0])
-    distype = mf6.get_grid_type().name
-    return distype
-
-
 class Mf6RTM(object):
     def __init__(self, wd, mf6api: Mf6API, phreeqcbmi: PhreeqcBMI) -> None:
         assert isinstance(mf6api, Mf6API), "MF6API must be an instance of Mf6API"
@@ -136,7 +108,7 @@ class Mf6RTM(object):
         self.get_selected_output_on = True
 
         # set discretization
-        self._set_dis()
+        self.nxyz = total_cells_in_grid(self.mf6api)
         # set time conversion factor
         self.set_time_conversion()
 
@@ -179,16 +151,6 @@ class Mf6RTM(object):
     def _set_reactive(self, reactive):
         """Set the model to run only transport or transport and reactions"""
         self.reactive = reactive
-
-    def _set_dis(self):
-        """Set the model grid dimensions according to mf6 grid type"""
-        if determine_grid_type(self.mf6api.sim) == "DIS":
-            self.nlay, self.nrow, self.ncol = get_mf6_dis(self.mf6api.sim)
-            self.nxyz = calc_nxyz_from_dis(self.mf6api.sim)
-        elif determine_grid_type(self.mf6api.sim) == "DISV":
-            self.nlay = self.mf6api.sim.nlay
-            self.ncpl = self.mf6api.sim.ncpl
-            self.nxyz = self.nlay * self.ncpl
 
     def _prepare_to_solve(self):
         """Prepare the model to solve"""
@@ -301,7 +263,9 @@ class Mf6RTM(object):
         """Function to replace inactive cells in the concentration array"""
         c_dbl_vect = np.reshape(c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz))
         # get inactive cells
-        inactive_idx = [get_indices(0, diffmask) for k in range(self.phreeqcbmi.ncomps)]
+        inactive_idx = [
+            utils.get_indices(0, diffmask) for k in range(self.phreeqcbmi.ncomps)
+        ]
         c_dbl_vect[:, inactive_idx] = self.previous_iteration_conc[:, inactive_idx]
         c_dbl_vect = c_dbl_vect.flatten()
         conc = [

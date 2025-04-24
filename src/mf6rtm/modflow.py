@@ -86,3 +86,10 @@ class Mf6API(modflowapi.ModflowApi):
             print("\nTransport failed to converge {0} times \n".format(self.num_fails))
         else:
             print("\nTransport converged successfully without any fails")
+
+    @property
+    def grid_type(self) -> str:
+        """Grid type of the ModFlow6 model"""
+        mf6 = self.sim.get_model(self.sim.model_names[0])
+        distype = mf6.get_grid_type().name
+        return distype
