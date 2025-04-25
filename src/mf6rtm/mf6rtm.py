@@ -381,7 +381,11 @@ class Mf6RTM(object):
             os.path.join(self.wd, self.sout_fname), index=False
         )
 
-    def _solve(self):
+    def _solve(self) -> bool:
+        """Alias for the solve method to provide backward compatibility"""
+        return self.solve()
+
+    def solve(self) -> bool:
         """Solve the model"""
         success = False  # initialize success flag
         sim_start = datetime.now()

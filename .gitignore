@@ -198,3 +198,4 @@ pixi.toml
 /autotest/test03/*
 /autotest/test04/*
 /autotest/test05/*
+.vscode/settings.json
