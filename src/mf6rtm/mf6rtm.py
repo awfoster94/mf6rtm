@@ -2,8 +2,10 @@
 phreeqcrm.
 """
 
+from typing import Any
 from pathlib import Path
 import os
+from os import PathLike
 import warnings
 from datetime import datetime
 
@@ -15,7 +17,7 @@ import numpy as np
 
 # from time import sleep
 from mf6rtm.mf6api import Mf6API
-from mf6rtm.phreeqc import PhreeqcBMI
+from mf6rtm.phreeqcbmi import PhreeqcBMI
 from mf6rtm import utils
 from mf6rtm.discretization import total_cells_in_grid
 
@@ -32,11 +34,22 @@ time_units_dic = {
 }
 
 
-def prep_to_run(wd):
-    """Prepares the model to run by checking if the model directory contains the necessary files
-    and returns the path to the yaml file (phreeqcrm) and the dll file (mf6 api)"""
+def prep_to_run(wd: PathLike) -> tuple[PathLike, PathLike]:
+    """
+    Prepares the model to run by checking if the model directory (wd) contains the necessary files
+    and returns the path to the yaml file (phreeqcrm) and the dll file (mf6 api)
+
+    Parameters
+    ----------
+    wd : PathLike
+        The path to the working directory of model directory
+    Returns
+    -------
+    tuple[PathLike, PathLike]
+        The path to the phreeqcrm model file (yaml) and the path to the MODFLOW 6 dll (associated with mf6api).
+    """
     # check if wd exists
-    assert os.path.exists(wd), f"{wd} not found"
+    assert os.path.exists(wd), f"Path {wd} not found"
     # check if file starting with libmf6 exists
     dll = [f for f in os.listdir(wd) if f.startswith("libmf6")]
     assert len(dll) == 1, "libmf6 dll not found in model directory"
@@ -53,7 +66,7 @@ def prep_to_run(wd):
     return yamlfile, dll
 
 
-def solve(wd, reactive=True, nthread=1):
+def solve(wd: PathLike, reactive: bool = True, nthread: int = 1) -> bool:
     """Wrapper to prepare and call solve functions"""
 
     mf6rtm = initialize_interfaces(wd, nthread=nthread)
@@ -63,7 +76,8 @@ def solve(wd, reactive=True, nthread=1):
     return success
 
 
-def initialize_interfaces(wd, nthread=1):
+# TODO: we should maybe move this into the Mf6API as an alternative constructor
+def initialize_interfaces(wd: PathLike, nthread: int = 1) -> Mf6API:
     """Function to initialize the interfaces for modflowapi and phreeqcrm and returns the mf6rtm object"""
 
     yamlfile, dll = prep_to_run(wd)
@@ -79,7 +93,7 @@ def initialize_interfaces(wd, nthread=1):
     return mf6rtm
 
 
-def set_nthread_yaml(yamlfile, nthread=1):
+def set_nthread_yaml(yamlfile: PathLike, nthread: int = 1) -> None:
     """Function to set the number of threads in the yaml file"""
     with open(yamlfile, "r") as f:
         lines = f.readlines()
@@ -92,7 +106,7 @@ def set_nthread_yaml(yamlfile, nthread=1):
 
 
 class Mf6RTM(object):
-    def __init__(self, wd, mf6api: Mf6API, phreeqcbmi: PhreeqcBMI) -> None:
+    def __init__(self, wd: PathLike, mf6api: Mf6API, phreeqcbmi: PhreeqcBMI) -> None:
         assert isinstance(mf6api, Mf6API), "MF6API must be an instance of Mf6API"
         assert isinstance(
             phreeqcbmi, PhreeqcBMI
@@ -112,7 +126,7 @@ class Mf6RTM(object):
         # set time conversion factor
         self.set_time_conversion()
 
-    def get_saturation_from_mf6(self):
+    def get_saturation_from_mf6(self) -> dict[Any, np.ndarray]:
         """
         Get the saturation
 
@@ -137,22 +151,25 @@ class Mf6RTM(object):
         self.phreeqcbmi.sat_now = sat  # set phreeqcmbi saturation
         return sat
 
-    def get_time_units_from_mf6(self):
+    def get_time_units_from_mf6(self) -> str:
         """Function to get the time units from mf6"""
         return self.mf6api.sim.tdis.time_units.get_data()
 
-    def set_time_conversion(self):
+    def set_time_conversion(self) -> None:
         """Function to set the time conversion factor"""
         time_units = self.get_time_units_from_mf6()
         self.time_conversion = 1.0 / time_units_dic[time_units]
         self.phreeqcbmi.SetTimeConversion(self.time_conversion)
 
+    # TODO: remove or have raise not implemented error
     def _set_fixed_components(self, fixed_components): ...
-    def _set_reactive(self, reactive):
+
+    # TODO: make reactive a property
+    def _set_reactive(self, reactive: bool) -> None:
         """Set the model to run only transport or transport and reactions"""
         self.reactive = reactive
 
-    def _prepare_to_solve(self):
+    def _prepare_to_solve(self) -> None:
         """Prepare the model to solve"""
         # check if sout fname exists
         if self._check_sout_exist():
@@ -165,36 +182,35 @@ class Mf6RTM(object):
         # get and write sout headers
         self._write_sout_headers()
 
-    def _set_ctime(self):
+    def _set_ctime(self) -> float:
         """Set the current time of the simulation from mf6api"""
         self.ctime = self.mf6api.get_current_time()
         self.phreeqcbmi._set_ctime(self.ctime)
         return self.ctime
 
-    def _set_etime(self):
+    def _set_etime(self) -> float:
         """Set the end time of the simulation from mf6api"""
         self.etime = self.mf6api.get_end_time()
         return self.etime
 
-    def _set_time_step(self):
+    def _set_time_step(self) -> float:
         self.time_step = self.mf6api.get_time_step()
         return self.time_step
 
-    def _finalize(self):
+    def _finalize(self) -> None:
         """Finalize the APIs"""
         self._finalize_mf6api()
         self._finalize_phreeqcrm()
-        return
 
-    def _finalize_mf6api(self):
+    def _finalize_mf6api(self) -> None:
         """Finalize the mf6api"""
         self.mf6api.finalize()
 
-    def _finalize_phreeqcrm(self):
+    def _finalize_phreeqcrm(self) -> None:
         """Finalize the phreeqcrm api"""
         self.phreeqcbmi.finalize()
 
-    def _get_cdlbl_vect(self):
+    def _get_cdlbl_vect(self) -> np.ndarray[np.float64]:
         """Get the concentration array from phreeqc bmi reshape to (ncomps, nxyz)"""
         c_dbl_vect = self.phreeqcbmi.GetConcentrations()
 
@@ -203,19 +219,19 @@ class Mf6RTM(object):
         ]  # reshape array
         return conc
 
-    def _set_conc_at_current_kstep(self, c_dbl_vect):
+    def _set_conc_at_current_kstep(self, c_dbl_vect: np.ndarray[np.float64]):
         """Saves the current concentration array to the object"""
         self.current_iteration_conc = np.reshape(
             c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz)
         )
 
-    def _set_conc_at_previous_kstep(self, c_dbl_vect):
+    def _set_conc_at_previous_kstep(self, c_dbl_vect: np.ndarray[np.float64]):
         """Saves the current concentration array to the object"""
         self.previous_iteration_conc = np.reshape(
             c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz)
         )
 
-    def _transfer_array_to_mf6(self):
+    def _transfer_array_to_mf6(self) -> np.ndarray[np.float64]:
         """Transfer the concentration array to mf6"""
         c_dbl_vect = self._get_cdlbl_vect()
 
@@ -243,23 +259,21 @@ class Mf6RTM(object):
                 )
         return c_dbl_vect
 
-    def _check_previous_conc_exists(self):
+    def _check_previous_conc_exists(self) -> bool:
         """Function to replace inactive cells in the concentration array"""
         # check if self.previous_iteration_conc is a property
-        if not hasattr(self, "previous_iteration_conc"):
-            return False
-        else:
-            return True
+        return hasattr(self, "previous_iteration_conc")
 
-    def _check_inactive_cells_exist(self, diffmask):
+    def _check_inactive_cells_exist(self, diffmask: np.ndarray[np.float64]) -> bool:
         """Function to check if inactive cells exist in the concentration array"""
         inact = utils.get_indices(0, diffmask)
-        if len(inact) > 0:
-            return True
-        else:
-            return False
+        return len(inact) > 0
 
-    def _replace_inactive_cells(self, c_dbl_vect, diffmask):
+    def _replace_inactive_cells(
+        self,
+        c_dbl_vect: np.ndarray[np.float64],
+        diffmask: np.ndarray[np.float64],
+    ) -> np.ndarray[np.float64]:
         """Function to replace inactive cells in the concentration array"""
         c_dbl_vect = np.reshape(c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz))
         # get inactive cells
@@ -273,7 +287,7 @@ class Mf6RTM(object):
         ]
         return conc
 
-    def _transfer_array_to_phreeqcrm(self):
+    def _transfer_array_to_phreeqcrm(self) -> np.ndarray[np.float64]:
         """Transfer the concentration array to phreeqc bmi"""
         mf6_conc_array = []
         for c in self.phreeqcbmi.components:
@@ -306,7 +320,7 @@ class Mf6RTM(object):
 
         return c_dbl_vect
 
-    def _update_selected_output(self):
+    def _update_selected_output(self) -> None:
         """Update the selected output dataframe and save to attribute"""
         self._get_selected_output()
         updf = pd.concat(
@@ -326,7 +340,7 @@ class Mf6RTM(object):
         sout[:, inactive_idx] = self._sout_k[:, inactive_idx]
         return sout
 
-    def _get_selected_output(self):
+    def _get_selected_output(self) -> None:
         """Get the selected output from phreeqc bmi and replace skipped reactive cells with previous conc"""
         # selected ouput
         self.phreeqcbmi.set_scalar("NthSelectedOutput", 0)
@@ -344,38 +358,35 @@ class Mf6RTM(object):
             df[col] = arr
         self._current_soutdf = df
 
-    def _update_soutdf(self, df):
+    def _update_soutdf(self, df: pd.DataFrame) -> None:
         """Update the selected output dataframe to phreeqcrm object"""
         self.phreeqcbmi.soutdf = df
 
-    def _check_sout_exist(self):
+    def _check_sout_exist(self) -> bool:
         """Check if selected output file exists"""
-        if os.path.exists(os.path.join(self.wd, self.sout_fname)):
-            return True
-        else:
-            return False
+        return os.path.exists(os.path.join(self.wd, self.sout_fname))
 
-    def _write_sout_headers(self):
+    def _write_sout_headers(self) -> None:
         """Write selected output headers to a file"""
         with open(os.path.join(self.wd, self.sout_fname), "w") as f:
             f.write(",".join(self.phreeqcbmi.sout_headers))
             f.write("\n")
 
-    def _rm_sout_file(self):
+    def _rm_sout_file(self) -> None:
         """Remove the selected output file"""
         try:
             os.remove(os.path.join(self.wd, self.sout_fname))
         except:
             pass
 
-    def _append_to_soutdf_file(self):
+    def _append_to_soutdf_file(self) -> None:
         """Append the current selected output to the selected output file"""
         assert not self._current_soutdf.empty, "current sout is empty"
         self._current_soutdf.to_csv(
             os.path.join(self.wd, self.sout_fname), mode="a", index=False, header=False
         )
 
-    def _export_soutdf(self):
+    def _export_soutdf(self) -> None:
         """Export the selected output dataframe to a csv file"""
         self.phreeqcbmi.soutdf.to_csv(
             os.path.join(self.wd, self.sout_fname), index=False
@@ -468,13 +479,19 @@ def get_less_than_zero_idx(arr):
     return idx
 
 
-def get_inactive_idx(arr, val=1e30):
+def get_inactive_idx(arr: np.ndarray, val: float = 1e30):
     """Function to get the index of all occurrences of <0 in an array"""
     idx = list(np.where(arr >= val)[0])
     return idx
 
 
-def get_conc_change_mask(ci, ck, ncomp, nxyz, treshold=1e-10):
+def get_conc_change_mask(
+    ci: np.ndarray[np.float64],
+    ck: np.ndarray[np.float64],
+    ncomp: int,
+    nxyz: int,
+    treshold: float = 1e-10,
+) -> np.ndarray[np.float64]:
     """Function to get the active-inactive cell mask for concentration change to inform phreeqc which cells to update"""
     # reshape arrays to 2D (nxyz, ncomp)
     ci = ci.reshape(nxyz, ncomp)
@@ -490,7 +507,7 @@ def get_conc_change_mask(ci, ck, ncomp, nxyz, treshold=1e-10):
     return diff
 
 
-def mrbeaker():
+def mrbeaker() -> str:
     """ASCII art of Mr. Beaker"""
     # get the path of this file
     whereismrbeaker = os.path.join(
