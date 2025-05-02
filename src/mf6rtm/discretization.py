@@ -19,7 +19,8 @@ def __not_supported(*args, **kargs):
 
 def __dis(api: Mf6API) -> int:
     """
-    Returns the total number of grid.
+    Returns the total number of grid cells from the structured rectangular 
+    layered grid specified in the Discretization (DIS) Package.
     """
     simulation = api.sim
     discretization = simulation.get_model(simulation.model_names[0]).dis
@@ -30,6 +31,10 @@ def __dis(api: Mf6API) -> int:
 
 
 def __disv(api: Mf6API) -> int:
+    """
+    Returns the total number of grid cells from the unstructured layered grid
+    specified in the Discretization by Vertices (DISV) Package.
+    """
     simulation = api.sim
     return simulation.nlay * simulation.ncpl
 
@@ -43,3 +48,33 @@ __DISCRETIZATION_FUNCTIONS = {
     "DISV3D": __not_supported,
     "UNDEFINED": __not_supported,
 }
+"""
+Dictionary mapping Modflow 6 grid type strings to their corresponding
+discretization functions.
+
+Keys
+----
+DIS : str
+    Structured rectangular layered grid type defined by the Discretization
+    (DIS) Package.
+DISV : str
+    Unstructured layered grid type defined by the Discretization by Vertices
+    (DISV) Package.
+DISU : str
+    Unstructured flexible grid type defined by the  Unstructured Discretization
+    (DISU) Package. Not supported.
+DISV2D : str
+    2D vertically discretized grid type. Not supported.
+DIS3D : str
+    3D discretized grid type. Not supported.
+DISV3D : str
+    3D vertically discretized grid type. Not supported.
+UNDEFINED : str
+    Undefined grid type. Not supported.
+
+Values
+------
+function
+    Function to calculate total cells in the grid based on
+    the grid type.
+"""
