@@ -265,16 +265,16 @@ class Mup3d(object):
         """
         self.charge_offset = charge_offset
 
-    def set_chem_stress(self, chem_stress):
+    def set_chem_stress(
+            self, 
+            chem_stress: ChemStress,
+    ) -> None:
         assert isinstance(chem_stress, ChemStress), 'chem_stress must be an instance of the ChemStress class'
         attribute_name = chem_stress.packnme
         setattr(self, attribute_name, chem_stress)
 
-        self.initiliaze_chem_stress(attribute_name)
+        self.initialize_chem_stress(attribute_name)
 
-    # def initialize_chem_stress(self):
-    #     #initialize phreeqc for chemstress
-    #     pass
 
     def set_wd(self, wd):
         """
@@ -541,10 +541,36 @@ class Mup3d(object):
         print('Phreeqc initialized')
         return
 
-    def initiliaze_chem_stress(self, attr, nthreads=1):
-        '''Initialize a solution with phreeqcrm and returns a dictionary with components as keys and
-            concentration array in moles/m3 as items
-        '''
+    def initialize_chem_stress(
+        self, 
+        attr: str, 
+        nthreads: int = 1, 
+    ) -> dict:
+        """Initialize a PhreeqcRM object with boundary condition chemical
+        concentrations for the specified Modflow Stress Period and Package.
+
+        Parameters
+        ----------
+        attr : str
+            The Modflow 6 Package name.
+        nthreads : int, optional
+            Number of threads to use for PhreeqcRM (default is 1).
+
+        Returns
+        -------
+        dict
+            Dictionary with component names as keys and concentration arrays in moles/m3 as values.
+
+        Notes
+        -----
+        This function initializes a PhreeqcRM object, loads a database, runs a Phreeqc input file,
+        and transfers solutions and reactants to the reaction-module workers. It then equilibrates
+        the cells, gets the concentrations, and converts them to moles/m3.
+
+        See Also
+        --------
+        phreeqcrm.PhreeqcRM : PhreeqcRM class documentation.
+        """
         print('Initializing ChemStress')
         # check if self has a an attribute that is a class ChemStress but without knowing the attribute name
         chem_stress = [attr for attr in dir(self) if isinstance(getattr(self, attr), ChemStress)]
@@ -552,18 +578,18 @@ class Mup3d(object):
         assert len(chem_stress) > 0, 'No ChemStress attribute found in self'
 
         # Get total number of grid cells affected by the stress period
-        nxyz = len(getattr(self, attr).sol_spd)
+        nxyz_spd = len(getattr(self, attr).sol_spd)
 
-        phreeqc_rm = phreeqcrm.PhreeqcRM(nxyz, nthreads)
+        phreeqc_rm = phreeqcrm.PhreeqcRM(nxyz_spd, nthreads)
         status = phreeqc_rm.SetComponentH2O(False)
         phreeqc_rm.UseSolutionDensityVolume(False)
 
         # Set concentration units
         status = phreeqc_rm.SetUnitsSolution(2)
 
-        poro = np.full((nxyz), 1.)
+        poro = np.full((nxyz_spd), 1.)
         status = phreeqc_rm.SetPorosity(poro)
-        print_chemistry_mask = np.full((nxyz), 1)
+        print_chemistry_mask = np.full((nxyz_spd), 1)
         status = phreeqc_rm.SetPrintChemistryMask(print_chemistry_mask)
         nchem = phreeqc_rm.GetChemistryCellCount()
 
@@ -584,18 +610,18 @@ class Mup3d(object):
 
         # Transfer solutions and reactants from the InitialPhreeqc instance to
         # the reaction-module workers. See https://usgs-coupled.github.io/phreeqcrm/namespacephreeqcrm.html#ac3d7e7db76abda97a3d11b3ff1903322
-        ic1 = [-1] * nxyz * 7
+        ic1 = [-1] * nxyz_spd * 7
         for e, i in enumerate(getattr(self, attr).sol_spd):
             # TODO: modify to conform to the index, element convention
             #       (i and e are reversed in line above)
             ic1[e] = i  # Solution 1
             # TODO: implment other ic1 blocks
-            # ic1[nxyz + i]     = -1  # Equilibrium phases none
-            # ic1[2 * nxyz + i] =  -1  # Exchange 1
-            # ic1[3 * nxyz + i] = -1  # Surface none
-            # ic1[4 * nxyz + i] = -1  # Gas phase none
-            # ic1[5 * nxyz + i] = -1  # Solid solutions none
-            # ic1[6 * nxyz + i] = -1  # Kinetics none
+            # ic1[nxyz_spd + i]     = -1  # Equilibrium phases none
+            # ic1[2 * nxyz_spd + i] =  -1  # Exchange 1
+            # ic1[3 * nxyz_spd + i] = -1  # Surface none
+            # ic1[4 * nxyz_spd + i] = -1  # Gas phase none
+            # ic1[5 * nxyz_spd + i] = -1  # Solid solutions none
+            # ic1[6 * nxyz_spd + i] = -1  # Kinetics none
         status = phreeqc_rm.InitialPhreeqc2Module(ic1)
 
         # Initial equilibration of cells
@@ -608,7 +634,7 @@ class Mup3d(object):
         c_dbl_vect = phreeqc_rm.GetConcentrations()
         c_dbl_vect = concentration_l_to_m3(c_dbl_vect)
 
-        c_dbl_vect = [c_dbl_vect[i:i + nxyz] for i in range(0, len(c_dbl_vect), nxyz)]
+        c_dbl_vect = [c_dbl_vect[i:i + nxyz_spd] for i in range(0, len(c_dbl_vect), nxyz_spd)]
 
         # find charge in c_dbl_vect and add charge_offset
         for i, c in enumerate(components):
@@ -616,7 +642,7 @@ class Mup3d(object):
                 c_dbl_vect[i] += self.charge_offset
 
         sconc = {}
-        for i in range(nxyz):
+        for i in range(nxyz_spd):
             sconc[i] = [array[i] for array in c_dbl_vect]
 
         status = phreeqc_rm.CloseFiles()
@@ -656,13 +682,13 @@ class Mup3d(object):
         phreeqcrm_yaml.YAMLSetPartitionUZSolids(False) # TODO: implement when UZF is turned on
 
         # Set concentration units
-        phreeqcrm_yaml.YAMLSetUnitsSolution(2)           # 1, mg/L; 2, mol/L; 3, kg/kgs
-        phreeqcrm_yaml.YAMLSetUnitsPPassemblage(1)       # 0, mol/L cell; 1, mol/L water; 2 mol/L rock
-        phreeqcrm_yaml.YAMLSetUnitsExchange(1)           # 0, mol/L cell; 1, mol/L water; 2 mol/L rock
-        phreeqcrm_yaml.YAMLSetUnitsSurface(1)            # 0, mol/L cell; 1, mol/L water; 2 mol/L rock
-        phreeqcrm_yaml.YAMLSetUnitsGasPhase(1)           # 0, mol/L cell; 1, mol/L water; 2 mol/L rock
-        phreeqcrm_yaml.YAMLSetUnitsSSassemblage(1)       # 0, mol/L cell; 1, mol/L water; 2 mol/L rock
-        phreeqcrm_yaml.YAMLSetUnitsKinetics(1)           # 0, mol/L cell; 1, mol/L water; 2 mol/L rock
+        phreeqcrm_yaml.YAMLSetUnitsSolution(2)       # 1, mg/L; 2, mol/L; 3, kg/kgs
+        phreeqcrm_yaml.YAMLSetUnitsPPassemblage(1)   # 0, mol/L cell; 1, mol/L water; 2 mol/L rock
+        phreeqcrm_yaml.YAMLSetUnitsExchange(1)       # 0, mol/L cell; 1, mol/L water; 2 mol/L rock
+        phreeqcrm_yaml.YAMLSetUnitsSurface(1)        # 0, mol/L cell; 1, mol/L water; 2 mol/L rock
+        phreeqcrm_yaml.YAMLSetUnitsGasPhase(1)       # 0, mol/L cell; 1, mol/L water; 2 mol/L rock
+        phreeqcrm_yaml.YAMLSetUnitsSSassemblage(1)   # 0, mol/L cell; 1, mol/L water; 2 mol/L rock
+        phreeqcrm_yaml.YAMLSetUnitsKinetics(1)       # 0, mol/L cell; 1, mol/L water; 2 mol/L rock
 
         # mf6 handles poro . set to 1
         poro = [1.0]*self.ncpl
