@@ -36,16 +36,16 @@ def __disv(api: Mf6API) -> int:
     specified in the Discretization by Vertices (DISV) Package.
     """
     simulation = api.sim
-    return simulation.nlay * simulation.ncpl
+    discretization = simulation.get_model(simulation.model_names[0]).disv
+    nlay = discretization.nlay.get_data()
+    ncpl = discretization.ncpl.get_data()
+    return nlay * ncpl
 
 
 __DISCRETIZATION_FUNCTIONS = {
     "DIS": __dis,
     "DISV": __disv,
     "DISU": __not_supported,
-    "DISV2D": __not_supported,
-    "DIS3D": __not_supported,
-    "DISV3D": __not_supported,
     "UNDEFINED": __not_supported,
 }
 """
@@ -63,12 +63,6 @@ DISV : str
 DISU : str
     Unstructured flexible grid type defined by the  Unstructured Discretization
     (DISU) Package. Not supported.
-DISV2D : str
-    2D vertically discretized grid type. Not supported.
-DIS3D : str
-    3D discretized grid type. Not supported.
-DISV3D : str
-    3D vertically discretized grid type. Not supported.
 UNDEFINED : str
     Undefined grid type. Not supported.
 
