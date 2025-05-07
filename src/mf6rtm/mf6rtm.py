@@ -330,14 +330,16 @@ class Mf6RTM(object):
         for i, c in enumerate(self.phreeqcbmi.components):
             conc_dict[c] = c_dbl_vect[i]
             # Set concentrations in mf6
-            if c.lower() == "charge":
+            gwt_model_name = self.component_model_dict[c]
+            if gwt_model_name.lower() == "charge":
                 self.mf6api.set_value(
-                    f"{c.upper()}/X",
+                    f"{gwt_model_name.upper()}/X",
                     concentration_l_to_m3(conc_dict[c]) + self.charge_offset,
                 )
             else:
                 self.mf6api.set_value(
-                    f"{c.upper()}/X", concentration_l_to_m3(conc_dict[c])
+                    f"{gwt_model_name.upper()}/X", 
+                    concentration_l_to_m3(conc_dict[c]),
                 )
         return c_dbl_vect
 

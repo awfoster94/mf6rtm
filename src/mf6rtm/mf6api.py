@@ -14,9 +14,9 @@ class Mf6API(modflowapi.ModflowApi):
 
     def _prepare_mf6(self):
         """Prepare mf6 bmi for transport calculations"""
-        # self.modelnmes = [nme.capitalize() for nme in self.sim.model_names]
+        self.modelnmes = [nme.capitalize() for nme in self.sim.model_names]
         # self.components = [nme.capitalize() for nme in self.sim.model_names[1:]]
-        self.nsln = self.get_subcomponent_count()
+        self.nsln = self.get_subcomponent_count() # i.e. Modflow6 models
         self.sim_start = datetime.now()
         self.ctimes = [0.0]
         self.num_fails = 0
@@ -32,7 +32,7 @@ class Mf6API(modflowapi.ModflowApi):
 
     def _solve_gwt(self):
         """Function to solve the transport loop"""
-        # prep to solve
+        # prep to solve each Modflow6 model "solution" (i.e. sln)
         for sln in range(1, self.nsln + 1):
             self.prepare_solve(sln)
         # the one-based stress period number
