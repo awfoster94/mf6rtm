@@ -14,8 +14,8 @@ class Mf6API(modflowapi.ModflowApi):
 
     def _prepare_mf6(self):
         """Prepare mf6 bmi for transport calculations"""
-        self.modelnmes = [nme.capitalize() for nme in self.sim.model_names]
-        self.components = [nme.capitalize() for nme in self.sim.model_names[1:]]
+        # self.modelnmes = [nme.capitalize() for nme in self.sim.model_names]
+        # self.components = [nme.capitalize() for nme in self.sim.model_names[1:]]
         self.nsln = self.get_subcomponent_count()
         self.sim_start = datetime.now()
         self.ctimes = [0.0]

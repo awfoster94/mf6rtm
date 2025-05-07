@@ -24,7 +24,7 @@ from mf6rtm.discretization import total_cells_in_grid
 # global variables
 DT_FMT = "%Y-%m-%d %H:%M:%S"
 
-time_units_dic = {
+time_units_dict = {
     "seconds": 1,
     "minutes": 60,
     "hours": 3600,
@@ -107,6 +107,46 @@ def set_nthread_yaml(yamlfile: PathLike, nthread: int = 1) -> None:
 
 class Mf6RTM(object):
     def __init__(self, wd: PathLike, mf6api: Mf6API, phreeqcbmi: PhreeqcBMI) -> None:
+        """
+        Initialize the Mf6RTM instance with specified working directory, MF6API,
+        and PhreeqcBMI instances.
+
+        Parameters
+        ----------
+        wd : PathLike
+            The working directory path for the model.
+        mf6api : Mf6API
+            An instance of the Mf6API class, representing the Modflow 6 API.
+        phreeqcbmi : PhreeqcBMI
+            An instance of the PhreeqcBMI class, representing the PHREEQC BMI.
+
+        Attributes
+        ----------
+        mf6api : Mf6API
+            The Modflow 6 API instance.
+        phreeqcbmi : PhreeqcBMI
+            The PHREEQC BMI instance.
+        charge_offset : float
+            Offset for charge, initialized to 0.0.
+        wd : PathLike
+            The working directory path.
+        sout_fname : str
+            Filename for the output, default is "sout.csv".
+        reactive : bool
+            Flag indicating if the model is reactive, default is True.
+        epsaqu : float
+            ??Epsaqueous value??, initialized to 0.0.
+        fixed_components : Any
+            Fixed components, default is None.
+        get_selected_output_on : bool
+            Flag indicating if selected output is on, default is True.
+        component_model_dict : dict[str, str]
+            Dictionary mapping PHREEQC aqueous chemical components to their 
+            corresponding Modflow 6 groundwater transport (gwt6) model names.
+        nxyz : int
+            Total number of cells in the grid.
+        """
+
         assert isinstance(mf6api, Mf6API), "MF6API must be an instance of Mf6API"
         assert isinstance(
             phreeqcbmi, PhreeqcBMI
@@ -121,10 +161,14 @@ class Mf6RTM(object):
         self.fixed_components = None
         self.get_selected_output_on = True
 
+        # set component model dictionary
+        self.component_model_dict = self._create_component_model_dict()
+
         # set discretization
         self.nxyz = total_cells_in_grid(self.mf6api)
         # set time conversion factor
         self.set_time_conversion()
+
 
     def get_saturation_from_mf6(self) -> dict[Any, np.ndarray]:
         """
@@ -140,7 +184,10 @@ class Mf6RTM(object):
         """
         sat = {
             component: self.mf6api.get_value(
-                self.mf6api.get_var_address("FMI/GWFSAT", f"{component}")
+                self.mf6api.get_var_address(
+                    "FMI/GWFSAT", 
+                    f"{self.component_model_dict[component]}"
+                )
             )
             for component in self.phreeqcbmi.components
         }
@@ -158,8 +205,44 @@ class Mf6RTM(object):
     def set_time_conversion(self) -> None:
         """Function to set the time conversion factor"""
         time_units = self.get_time_units_from_mf6()
-        self.time_conversion = 1.0 / time_units_dic[time_units]
+        self.time_conversion = 1.0 / time_units_dict[time_units]
         self.phreeqcbmi.SetTimeConversion(self.time_conversion)
+
+    def _create_component_model_dict(self) -> dict[str, str]: 
+        """
+        Create a dictionary of PHREEQC aqueous chemical component names and
+        their corresponding Modflow 6 Groundwater Transport (GWT) model names.
+
+        Returns
+        -------
+        component_model_dict : dict[str, str]
+            A dictionary where the keys are the component names and the values are
+            the corresponding model names.
+        """
+        components = self.phreeqcbmi.get_value_ptr("Components")
+        components = [str(component) for component in components]
+
+        component_codes = []
+        for component in components:
+            component_code = component.lower()
+            if component_code == 'charge':
+                component_code = 'ch'
+            component_codes.append(component_code)
+
+        model_names = self.mf6api.sim.model_names
+        gwt_model_names = []
+        for model_name in model_names:
+            if self.mf6api.sim.get_model(model_name).model_type == 'gwt6':
+                gwt_model_names.append(model_name)
+
+        # Confirm alignment
+        assert len(components) == len(gwt_model_names)
+        assert len(components) == len(component_codes)
+        for component_code, gwt_model_name in zip(component_codes, gwt_model_names):
+            assert component_code.lower() in gwt_model_name.lower()
+
+        return dict(zip(components, gwt_model_names))
+
 
     # TODO: remove or have raise not implemented error
     def _set_fixed_components(self, fixed_components): ...
@@ -243,19 +326,18 @@ class Mf6RTM(object):
         else:
             pass
 
-        conc_dic = {}
-        for e, c in enumerate(self.phreeqcbmi.components):
-            # conc_dic[c] = np.reshape(c_dbl_vect[e], (self.nlay, self.nrow, self.ncol))
-            conc_dic[c] = c_dbl_vect[e]
+        conc_dict = {}
+        for i, c in enumerate(self.phreeqcbmi.components):
+            conc_dict[c] = c_dbl_vect[i]
             # Set concentrations in mf6
             if c.lower() == "charge":
                 self.mf6api.set_value(
                     f"{c.upper()}/X",
-                    concentration_l_to_m3(conc_dic[c]) + self.charge_offset,
+                    concentration_l_to_m3(conc_dict[c]) + self.charge_offset,
                 )
             else:
                 self.mf6api.set_value(
-                    f"{c.upper()}/X", concentration_l_to_m3(conc_dic[c])
+                    f"{c.upper()}/X", concentration_l_to_m3(conc_dict[c])
                 )
         return c_dbl_vect
 
@@ -295,7 +377,10 @@ class Mf6RTM(object):
                 mf6_conc_array.append(
                     concentration_m3_to_l(
                         self.mf6api.get_value(
-                            self.mf6api.get_var_address("X", f"{c.upper()}")
+                            self.mf6api.get_var_address(
+                                "X", 
+                                f"{self.component_model_dict[c].upper()}",
+                            )
                         )
                         - self.charge_offset
                     )
@@ -305,7 +390,10 @@ class Mf6RTM(object):
                 mf6_conc_array.append(
                     concentration_m3_to_l(
                         self.mf6api.get_value(
-                            self.mf6api.get_var_address("X", f"{c.upper()}")
+                            self.mf6api.get_var_address(
+                                "X", 
+                                f"{self.component_model_dict[c].upper()}",
+                            )
                         )
                     )
                 )
@@ -406,7 +494,6 @@ class Mf6RTM(object):
         assert self._check_sout_exist(), f"{self.sout_fname} not found"
 
         print("Starting transport solution at {0}".format(sim_start.strftime(DT_FMT)))
-        # print(f"Solving the following components: {', '.join([nme for nme in self.mf6api.modelnmes])}")
         ctime = self._set_ctime()
         etime = self._set_etime()
         while ctime < etime:
