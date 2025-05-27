@@ -10,7 +10,7 @@ from typing import Union
 import pandas as pd
 import numpy as np
 import phreeqcrm
-from mf6rtm.mf6rtm import solve, concentration_l_to_m3, DT_FMT, time_units_dic
+from mf6rtm.mf6rtm import solve, concentration_l_to_m3, DT_FMT, time_units_dict
 from . import utils
 from phreeqcrm import yamlphreeqcrm
 import yaml
@@ -145,7 +145,8 @@ class Mup3d(object):
         nlay (int): Number of layers in the model.
         nrow (int): Number of rows in the model.
         ncol (int): Number of columns in the model.
-        ncpl (int): Total number of cells in the model (nlay * nrow * ncol).
+        nxyz (int): Total number of cells in the model, either 
+            (nlay * nrow * ncol) or (nlay * ncpl).
 
     """
     def __init__(
@@ -200,12 +201,12 @@ class Mup3d(object):
         self.nlay = int(nlay)
         self.nrow = int(nrow)
         self.ncol = int(ncol)
-        self.ncpl = self.nlay*self.nrow*self.ncol
+        self.nxyz = self.nlay*self.nrow*self.ncol
 
         if self.solutions.ic is None:
-            self.solutions.ic = [1]*self.ncpl
+            self.solutions.ic = [1]*self.nxyz
         if isinstance(self.solutions.ic, (int, float)):
-            self.solutions.ic = np.reshape([self.solutions.ic]*self.ncpl, (self.nlay, self.nrow, self.ncol))
+            self.solutions.ic = np.reshape([self.solutions.ic]*self.nxyz, (self.nlay, self.nrow, self.ncol))
         assert self.solutions.ic.shape == (self.nlay, self.nrow, self.ncol), f'Initial conditions array must be an array of the shape ({nlay}, {nrow}, {ncol}) not {self.solutions.ic.shape}'
 
     def set_fixed_components(self, fixed_components):
@@ -231,7 +232,7 @@ class Mup3d(object):
 
         # Proceed with the common logic
         if isinstance(phase.ic, (int, float)):
-            phase.ic = np.reshape([phase.ic]*self.ncpl, (self.nlay, self.nrow, self.ncol))
+            phase.ic = np.reshape([phase.ic]*self.nxyz, (self.nlay, self.nrow, self.ncol))
         phase.data = {i: phase.data[key] for i, key in enumerate(phase.data.keys())}
         assert phase.ic.shape == (self.nlay, self.nrow, self.ncol), f'Initial conditions array must be an array of the shape ({self.nlay}, {self.nrow}, {self.ncol}) not {phase.ic.shape}'
 
@@ -244,7 +245,7 @@ class Mup3d(object):
         assert isinstance(exchanger, ExchangePhases), 'exchanger must be an instance of the Exchange class'
         # exchanger.data = {i: exchanger.data[key] for i, key in enumerate(exchanger.data.keys())}
         if isinstance(exchanger.ic, (int, float)):
-            exchanger.ic = np.reshape([exchanger.ic]*self.ncpl, (self.nlay, self.nrow, self.ncol))
+            exchanger.ic = np.reshape([exchanger.ic]*self.nxyz, (self.nlay, self.nrow, self.ncol))
         assert exchanger.ic.shape == (self.nlay, self.nrow, self.ncol), f'Initial conditions array must be an array of the shape ({self.nlay}, {self.nrow}, {self.ncol}) not {exchanger.ic.shape}'
         self.exchange_phases = exchanger
 
@@ -256,7 +257,7 @@ class Mup3d(object):
         eq_phases.data = {i: eq_phases.data[key] for i, key in enumerate(eq_phases.data.keys())}
         self.equilibrium_phases = eq_phases
         if isinstance(self.equilibrium_phases.ic, (int, float)):
-            self.equilibrium_phases.ic = np.reshape([self.equilibrium_phases.ic]*self.ncpl, (self.nlay, self.nrow, self.ncol))
+            self.equilibrium_phases.ic = np.reshape([self.equilibrium_phases.ic]*self.nxyz, (self.nlay, self.nrow, self.ncol))
         assert self.equilibrium_phases.ic.shape == (self.nlay, self.nrow, self.ncol), f'Initial conditions array must be an array of the shape ({self.nlay}, {self.nrow}, {self.ncol}) not {self.equilibrium_phases.ic.shape}'
 
     def set_charge_offset(self, charge_offset):
@@ -317,10 +318,10 @@ class Mup3d(object):
 
     def set_reaction_temp(self):
         if isinstance(self.init_temp, (int, float)):
-            rx_temp = [self.init_temp]*self.ncpl
+            rx_temp = [self.init_temp]*self.nxyz
             print('Using temperatue of {} for all cells'.format(rx_temp[0]))
         elif isinstance(self.init_temp, (list, np.ndarray)):
-            rx_temp = [self.init_temp[0]]*self.ncpl
+            rx_temp = [self.init_temp[0]]*self.nxyz
             print('Using temperatue of {} from SOLUTION 1 for all cells'.format(rx_temp[0]))
         self.reaction_temp = rx_temp
         return rx_temp
@@ -446,7 +447,7 @@ class Mup3d(object):
         phinp = self.generate_phreeqc_script()
 
         # initialize phreeqccrm object
-        self.phreeqc_rm = phreeqcrm.PhreeqcRM(self.ncpl, nthreads)
+        self.phreeqc_rm = phreeqcrm.PhreeqcRM(self.nxyz, nthreads)
         status = self.phreeqc_rm.SetComponentH2O(False)
         self.phreeqc_rm.UseSolutionDensityVolume(False)
 
@@ -461,10 +462,10 @@ class Mup3d(object):
         # status = self.phreeqc_rm.SetUnitsKinetics(1)
 
         # mf6 handles poro . set to 1
-        poro = np.full((self.ncpl), 1.)
+        poro = np.full((self.nxyz), 1.)
         status = self.phreeqc_rm.SetPorosity(poro)
 
-        print_chemistry_mask = np.full((self.ncpl), 1)
+        print_chemistry_mask = np.full((self.nxyz), 1)
         status = self.phreeqc_rm.SetPrintChemistryMask(print_chemistry_mask)
         nchem = self.phreeqc_rm.GetChemistryCellCount()
         self.nchem = nchem
@@ -494,21 +495,21 @@ class Mup3d(object):
         status = self.phreeqc_rm.SetTime(time)
         status = self.phreeqc_rm.SetTimeStep(time_step)
 
-        ic1 = np.ones((self.ncpl, 7), dtype=int)*-1
+        ic1 = np.ones((self.nxyz, 7), dtype=int)*-1
 
         # this gets a column slice
-        ic1[:, 0] = np.reshape(self.solutions.ic, self.ncpl)
+        ic1[:, 0] = np.reshape(self.solutions.ic, self.nxyz)
 
         if isinstance(self.equilibrium_phases, EquilibriumPhases):
-            ic1[:, 1] = np.reshape(self.equilibrium_phases.ic, self.ncpl)
+            ic1[:, 1] = np.reshape(self.equilibrium_phases.ic, self.nxyz)
         if isinstance(self.exchange_phases, ExchangePhases):
-            ic1[:, 2] = np.reshape(self.exchange_phases.ic, self.ncpl)  # Exchange
+            ic1[:, 2] = np.reshape(self.exchange_phases.ic, self.nxyz)  # Exchange
         if isinstance(self.surfaces_phases, Surfaces):
-            ic1[:, 3] = np.reshape(self.surfaces_phases.ic, self.ncpl)  # Surface
+            ic1[:, 3] = np.reshape(self.surfaces_phases.ic, self.nxyz)  # Surface
         ic1[:, 4] = -1  # Gas phase
         ic1[:, 5] = -1  # Solid solutions
         if isinstance(self.kinetic_phases, KineticPhases):
-            ic1[:, 6] = np.reshape(self.kinetic_phases.ic, self.ncpl)  # Kinetics
+            ic1[:, 6] = np.reshape(self.kinetic_phases.ic, self.nxyz)  # Kinetics
 
         ic1_flatten = ic1.flatten('F')
 
@@ -524,13 +525,13 @@ class Mup3d(object):
         c_dbl_vect = self.phreeqc_rm.GetConcentrations()
         self.init_conc_array_phreeqc = c_dbl_vect
 
-        conc = [c_dbl_vect[i:i + self.ncpl] for i in range(0, len(c_dbl_vect), self.ncpl)]
+        conc = [c_dbl_vect[i:i + self.nxyz] for i in range(0, len(c_dbl_vect), self.nxyz)]
 
         self.sconc = {}
 
-        for e, c in enumerate(components):
-            # TODO: modify to conform to the index, element convention
-            get_conc = np.reshape(conc[e], (self.nlay, self.nrow, self.ncol))
+        for i, c in enumerate(components):
+            # where thelement is a component name (c)
+            get_conc = np.reshape(conc[i], (self.nlay, self.nrow, self.ncol))
             get_conc = concentration_l_to_m3(get_conc)
             if c.lower() == 'charge':
                 get_conc += self.charge_offset
@@ -666,7 +667,7 @@ class Mup3d(object):
         '''Write the phreeqc init yaml file'''
         fdir = os.path.join(self.wd, filename)
         phreeqcrm_yaml = yamlphreeqcrm.YAMLPhreeqcRM()
-        phreeqcrm_yaml.YAMLSetGridCellCount(self.ncpl)
+        phreeqcrm_yaml.YAMLSetGridCellCount(self.nxyz)
         phreeqcrm_yaml.YAMLThreadCount(1)
         status = phreeqcrm_yaml.YAMLSetComponentH2O(False)
         status = phreeqcrm_yaml.YAMLUseSolutionDensityVolume(False)
@@ -691,15 +692,15 @@ class Mup3d(object):
         phreeqcrm_yaml.YAMLSetUnitsKinetics(1)       # 0, mol/L cell; 1, mol/L water; 2 mol/L rock
 
         # mf6 handles poro . set to 1
-        poro = [1.0]*self.ncpl
+        poro = [1.0]*self.nxyz
         status = phreeqcrm_yaml.YAMLSetPorosity(list(poro))
 
-        print_chemistry_mask = [1]*self.ncpl
+        print_chemistry_mask = [1]*self.nxyz
         assert all(isinstance(i, int) for i in print_chemistry_mask), 'print_chemistry_mask length must be equal to the number of grid cells'
         status = phreeqcrm_yaml.YAMLSetPrintChemistryMask(print_chemistry_mask)
         status = phreeqcrm_yaml.YAMLSetPrintChemistryOn(False, True, False)  # workers, initial_phreeqc, utility
 
-        rv = [1] * self.ncpl
+        rv = [1] * self.nxyz
         phreeqcrm_yaml.YAMLSetRepresentativeVolume(rv)
 
         # Load database

@@ -9,6 +9,8 @@ class Mf6API(modflowapi.ModflowApi):
         # TODO: reverse the order of args to match modflowapi?
         modflowapi.ModflowApi.__init__(self, dll, working_directory=wd)
         self.initialize()
+        # NOTE: The `flopy.mf6.MFSimulation() class has different methods & attributes
+        # than the `modflowapi.extensions.ApiSimulation()` class 
         self.sim = flopy.mf6.MFSimulation.load(sim_ws=wd, verbosity_level=0)
         self.fmi = False
 
