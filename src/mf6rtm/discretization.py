@@ -19,7 +19,7 @@ def __not_supported(*args, **kargs):
 
 def __dis(api: Mf6API) -> int:
     """
-    Returns the total number of grid cells from the structured rectangular 
+    Returns the total number of grid cells from the structured rectangular
     layered grid specified in the Discretization (DIS) Package.
     """
     simulation = api.sim

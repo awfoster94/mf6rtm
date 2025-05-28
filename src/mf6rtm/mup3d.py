@@ -19,15 +19,19 @@ import yaml
 class Block:
     """Base class for PHREEQC input "keyword data blocks".
 
-    Attributes:
-        data: A dictionary of geochemical components (keys) and their total
-            concentrations (list) indexed by block number, similar to a .pqi file.
-        names: A list of names of geochemical components that serve as keys to
-            the data.
-        ic: initial condition.
-        eq_solutions: list of equilibrium solutions.
-        options: list of options.
-
+    Attributes
+    ----------
+    data : dict
+        Dictionary of geochemical components (keys) and their total concentrations
+        (list) indexed by block number, similar to a .pqi file.
+    names : list
+        List of names of geochemical components that serve as keys to the data.
+    ic : array
+        Initial condition.
+    eq_solutions : list
+        List of equilibrium solutions.
+    options : list
+        List of options.
     """
     def __init__(
         self,
@@ -36,14 +40,17 @@ class Block:
     ) -> None:
         """Initialize a Block instance with inputs from a PHREEQC data block.
 
-        Args:
-            data: PHREEQC components (keys) and their total concentrations (list)
-                indexed by block number, similar to a .pqi file.
-            ic: Initial condition concentrations. Defaults to None.
+        Parameters
+        ----------
+        data
+            PHREEQC components (keys) and their total concentrations (list) indexed by
+            block number, similar to a .pqi file.
+        ic, optional
+            Initial condition concentrations. Default is None.
         """
         self.data = data
         self.names = [key for key in data.keys()]
-        self.ic = ic  # None means no initial condition (-1)
+        self.ic = ic  #: None means no initial condition (-1)
         self.eq_solutions = []
         self.options = []
 
@@ -121,33 +128,62 @@ phase_types = {
 
 
 class Mup3d(object):
-    """The Mup3d class provides a wrapper for a PhreeqcRM model object and
-     its inputs.
+    """The Mup3d class wrapper and extension for a PhreeqcRM model class.
 
-    Attributes:
-        name (str): Name of the model.
-        wd (str): Working directory path.
-        charge_offset (float): Charge offset, initialized to 0.0.
-        database (str): Path to the PHREEQC database file.
-        solutions (Solutions): Solutions instance containing the geochemical data.
-        init_temp (float): Initial temperature, default is 25.0.
-        equilibrium_phases (EquilibriumPhases): Equilibrium phases in the model.
-        kinetic_phases (KineticPhases): Kinetic phases in the model.
-        exchange_phases (ExchangePhases): Exchange phases in the model.
-        surfaces_phases (Surfaces): Surface phases in the model.
-        postfix (str): Postfix for the output files.
-        phreeqc_rm (object): PHREEQC reactive transport model instance.
-        sconc (dict[str, np.ndarray]): Dictionary of concentrations in units of
-            moles per m^3 and structured to match the shape of Modflow's grid
-        phinp (object): PHREEQC input instance.
-        components (list): List of chemical components.
-        fixed_components (list): List of fixed components.
-        nlay (int): Number of layers in the model.
-        nrow (int): Number of rows in the model.
-        ncol (int): Number of columns in the model.
-        nxyz (int): Total number of cells in the model, either 
-            (nlay * nrow * ncol) or (nlay * ncpl).
+    This class extends the PhreeqcRM class to include additional methods
+    that facilitate the coupling to Modflow6 via ModflowAPI.
 
+    Attributes
+    ----------
+    name : str
+        Name of the model.
+    wd : str
+        Working directory path.
+    charge_offset : float
+        Charge offset, initialized to 0.0.
+    database : str
+        Path to the PHREEQC database file.
+    solutions : Solutions
+        Solutions instance containing the geochemical data.
+    init_temp : float, optional
+        Initial temperature. Default is 25.0.
+    equilibrium_phases : EquilibriumPhases
+        Equilibrium phases in the model.
+    kinetic_phases : KineticPhases
+        Kinetic phases in the model.
+    exchange_phases : ExchangePhases
+        Exchange phases in the model.
+    surfaces_phases : Surfaces
+        Surface phases in the model.
+    postfix : str
+        Postfix for the output files.
+    phreeqc_rm : object
+        PHREEQC reactive transport model instance.
+    sconc : dict[str, np.ndarray]
+        Dictionary of concentrations in units of moles per m^3 and structured to
+        match the shape of Modflow's grid.
+    phinp : object
+        PHREEQC input instance.
+    components : list
+        List of chemical components.
+    fixed_components : list
+        List of fixed components.
+    nlay : int
+        Number of layers in the model grid.
+    nrow : int
+        Number of rows in the model grid.
+    ncol : int
+        Number of columns in the model grid.
+    nxyz : int
+        Total number of cells in the model grid, either
+        (nlay * nrow * ncol) if DIS or
+        (nlay * ncpl) if DISV or
+        (nxyz) if DISU.
+    grid_shape : tuple
+        Shape of the model grid, either
+        (nlay, nrow, ncol) if DIS or
+        (nlay, ncpl) if DISV or
+        (nxyz) if DISU.
     """
     def __init__(
         self,
@@ -156,20 +192,42 @@ class Mup3d(object):
         nlay: Union[int, None] = None,
         nrow: Union[int, None] = None,
         ncol: Union[int, None] = None,
+        ncpl: Union[int, None] = None,
+        nxyz: Union[int, None] = None,
     ):
         """Initializes a Mup3d instance with the given parameters.
 
-        Args:
-            name (str, optional): The name of the model. Defaults to None.
-            solutions (Solutions, optional): Instance of the Solutions class containing
-                the geochemical data. Required if name is not an instance of Solutions.
-            nlay (int, optional): Number of layers in the model. Required.
-            nrow (int, optional): Number of rows in the model. Required.
-            ncol (int, optional): Number of columns in the model. Required.
+        Parameters
+        ----------
+        name : str, optional
+            The name of the model. Default is None.
+        solutions : Solutions, optional
+            Instance of the Solutions class containing the geochemical data.
+            Required if name is not an instance of Solutions.
+        nlay : int, optional
+            Number of layers in the model, if it has a layered grid
+            discretization (DIS or DISV).
+        nrow : int, optional
+            Number of rows in the model, if it has a structured rectangular
+            layered grid discretization (DIS).
+        ncol : int, optional
+            Number of columns in the model, if it has a structured rectangular
+            layered grid discretization (DIS).
+        ncpl : int, optional
+            Number of cells per layer in the model, if it has an unstructured
+            layered grid Discretization by Vertices (DISV).
+        nxyz : int, optional
+            Total number of cells in the model grid, either
+            (nlay * nrow * ncol) if DIS or
+            (nlay * ncpl) if DISV or
+            (nxyz) if DISU.
 
-        Raises:
-            ValueError: If solutions is not provided.
-            ValueError: If any of nlay, nrow, or ncol is not provided.
+        Raises
+        ------
+        ValueError
+            If solutions is not provided.
+        ValueError
+            If any of nlay, nrow, or ncol is not provided.
         """
         if solutions is None and isinstance(name, Solutions):
             # New style: first argument is solutions
@@ -178,8 +236,10 @@ class Mup3d(object):
         # Validate required parameters
         if solutions is None:
             raise ValueError("solutions parameter is required")
-        if any(param is None for param in [nlay, nrow, ncol]):
-            raise ValueError("nlay, nrow, and ncol parameters are required")
+        if (any(param is None for param in [nlay, nrow, ncol]) and
+            any(param is None for param in [nlay, ncpl])):
+            raise ValueError(("nlay, nrow, and ncol parameters are required "
+                " for DIS, or nlay and ncpl parameters are required for DISV"))
         self.name = name
         self.wd = None
         self.charge_offset = 0.0
@@ -198,16 +258,33 @@ class Mup3d(object):
         self.phinp = None
         self.components = None
         self.fixed_components = None
-        self.nlay = int(nlay)
-        self.nrow = int(nrow)
-        self.ncol = int(ncol)
-        self.nxyz = self.nlay*self.nrow*self.ncol
+
+        # Set grid parameters for DIS
+        if all(param is not None for param in [nlay, nrow, ncol]):
+            self.nlay = int(nlay)
+            self.nrow = int(nrow)
+            self.ncol = int(ncol)
+            self.nxyz = self.nlay * self.nrow * self.ncol
+            self.grid_shape = (self.nlay, self.nrow, self.ncol)
+        # Set grid parameters for DISV
+        elif all(param is not None for param in [nlay, ncpl]):
+            self.nlay = int(nlay)
+            self.ncpl = int(ncpl)
+            self.nxyz = self.nlay * self.ncpl
+            self.grid_shape = (self.nlay, self.ncpl)
+        # Set grid parameters for DISU
+        elif nxyz is not None:
+            self.nxyz = int(nxyz)
+            self.grid_shape = (self.nxyz,)
 
         if self.solutions.ic is None:
             self.solutions.ic = [1]*self.nxyz
         if isinstance(self.solutions.ic, (int, float)):
-            self.solutions.ic = np.reshape([self.solutions.ic]*self.nxyz, (self.nlay, self.nrow, self.ncol))
-        assert self.solutions.ic.shape == (self.nlay, self.nrow, self.ncol), f'Initial conditions array must be an array of the shape ({nlay}, {nrow}, {ncol}) not {self.solutions.ic.shape}'
+            self.solutions.ic = np.reshape([self.solutions.ic]*self.nxyz, self.grid_shape)
+            print(self.solutions.ic.shape, self.nxyz, self.grid_shape)
+        assert (self.solutions.ic.shape == self.grid_shape,
+            f'Initial conditions array must be an array of the shape ({self.grid_shape}) not {self.solutions.ic.shape}'
+        )
 
     def set_fixed_components(self, fixed_components):
         '''Set the fixed components for the MF6RTM model. These are the components that are not transported during the simulation.
@@ -232,9 +309,9 @@ class Mup3d(object):
 
         # Proceed with the common logic
         if isinstance(phase.ic, (int, float)):
-            phase.ic = np.reshape([phase.ic]*self.nxyz, (self.nlay, self.nrow, self.ncol))
+            phase.ic = np.reshape([phase.ic]*self.nxyz, self.grid_shape)
         phase.data = {i: phase.data[key] for i, key in enumerate(phase.data.keys())}
-        assert phase.ic.shape == (self.nlay, self.nrow, self.ncol), f'Initial conditions array must be an array of the shape ({self.nlay}, {self.nrow}, {self.ncol}) not {phase.ic.shape}'
+        assert phase.ic.shape == self.grid_shape, f'Initial conditions array must be an array of the shape ({self.nlay}, {self.nrow}, {self.ncol}) not {phase.ic.shape}'
 
         # Dynamically set the phase attribute based on the class name
         setattr(self, f"{phase_class.__name__.lower().split('phases')[0]}_phases", phase)
@@ -245,8 +322,8 @@ class Mup3d(object):
         assert isinstance(exchanger, ExchangePhases), 'exchanger must be an instance of the Exchange class'
         # exchanger.data = {i: exchanger.data[key] for i, key in enumerate(exchanger.data.keys())}
         if isinstance(exchanger.ic, (int, float)):
-            exchanger.ic = np.reshape([exchanger.ic]*self.nxyz, (self.nlay, self.nrow, self.ncol))
-        assert exchanger.ic.shape == (self.nlay, self.nrow, self.ncol), f'Initial conditions array must be an array of the shape ({self.nlay}, {self.nrow}, {self.ncol}) not {exchanger.ic.shape}'
+            exchanger.ic = np.reshape([exchanger.ic]*self.nxyz, self.grid_shape)
+        assert exchanger.ic.shape == self.grid_shape, f'Initial conditions array must be an array of the shape ({self.nlay}, {self.nrow}, {self.ncol}) not {exchanger.ic.shape}'
         self.exchange_phases = exchanger
 
     def set_equilibrium_phases(self, eq_phases):
@@ -257,8 +334,8 @@ class Mup3d(object):
         eq_phases.data = {i: eq_phases.data[key] for i, key in enumerate(eq_phases.data.keys())}
         self.equilibrium_phases = eq_phases
         if isinstance(self.equilibrium_phases.ic, (int, float)):
-            self.equilibrium_phases.ic = np.reshape([self.equilibrium_phases.ic]*self.nxyz, (self.nlay, self.nrow, self.ncol))
-        assert self.equilibrium_phases.ic.shape == (self.nlay, self.nrow, self.ncol), f'Initial conditions array must be an array of the shape ({self.nlay}, {self.nrow}, {self.ncol}) not {self.equilibrium_phases.ic.shape}'
+            self.equilibrium_phases.ic = np.reshape([self.equilibrium_phases.ic]*self.nxyz, self.grid_shape)
+        assert self.equilibrium_phases.ic.shape == self.grid_shape, f'Initial conditions array must be an array of the shape ({self.nlay}, {self.nrow}, {self.ncol}) not {self.equilibrium_phases.ic.shape}'
 
     def set_charge_offset(self, charge_offset):
         """
@@ -267,7 +344,7 @@ class Mup3d(object):
         self.charge_offset = charge_offset
 
     def set_chem_stress(
-            self, 
+            self,
             chem_stress: ChemStress,
     ) -> None:
         assert isinstance(chem_stress, ChemStress), 'chem_stress must be an instance of the ChemStress class'
@@ -531,7 +608,7 @@ class Mup3d(object):
 
         for i, c in enumerate(components):
             # where thelement is a component name (c)
-            get_conc = np.reshape(conc[i], (self.nlay, self.nrow, self.ncol))
+            get_conc = np.reshape(conc[i], self.grid_shape)
             get_conc = concentration_l_to_m3(get_conc)
             if c.lower() == 'charge':
                 get_conc += self.charge_offset
@@ -543,9 +620,9 @@ class Mup3d(object):
         return
 
     def initialize_chem_stress(
-        self, 
-        attr: str, 
-        nthreads: int = 1, 
+        self,
+        attr: str,
+        nthreads: int = 1,
     ) -> dict:
         """Initialize a PhreeqcRM object with boundary condition chemical
         concentrations for the specified Modflow Stress Period and Package.

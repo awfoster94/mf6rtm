@@ -141,7 +141,7 @@ class Mf6RTM(object):
         get_selected_output_on : bool
             Flag indicating if selected output is on, default is True.
         component_model_dict : dict[str, str]
-            Dictionary mapping PHREEQC aqueous chemical components to their 
+            Dictionary mapping PHREEQC aqueous chemical components to their
             corresponding Modflow 6 groundwater transport (gwt6) model names.
         nxyz : int
             Total number of cells in the grid.
@@ -185,7 +185,7 @@ class Mf6RTM(object):
         sat = {
             component: self.mf6api.get_value(
                 self.mf6api.get_var_address(
-                    "FMI/GWFSAT", 
+                    "FMI/GWFSAT",
                     f"{self.component_model_dict[component]}"
                 )
             )
@@ -208,7 +208,7 @@ class Mf6RTM(object):
         self.time_conversion = 1.0 / time_units_dict[time_units]
         self.phreeqcbmi.SetTimeConversion(self.time_conversion)
 
-    def _create_component_model_dict(self) -> dict[str, str]: 
+    def _create_component_model_dict(self) -> dict[str, str]:
         """
         Create a dictionary of PHREEQC aqueous chemical component names and
         their corresponding Modflow 6 Groundwater Transport (GWT) model names.
@@ -338,7 +338,7 @@ class Mf6RTM(object):
                 )
             else:
                 self.mf6api.set_value(
-                    f"{gwt_model_name.upper()}/X", 
+                    f"{gwt_model_name.upper()}/X",
                     concentration_l_to_m3(conc_dict[c]),
                 )
         return c_dbl_vect
@@ -380,7 +380,7 @@ class Mf6RTM(object):
                     concentration_m3_to_l(
                         self.mf6api.get_value(
                             self.mf6api.get_var_address(
-                                "X", 
+                                "X",
                                 f"{self.component_model_dict[c].upper()}",
                             )
                         )
@@ -393,7 +393,7 @@ class Mf6RTM(object):
                     concentration_m3_to_l(
                         self.mf6api.get_value(
                             self.mf6api.get_var_address(
-                                "X", 
+                                "X",
                                 f"{self.component_model_dict[c].upper()}",
                             )
                         )
