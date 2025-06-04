@@ -3,9 +3,14 @@ This module contains the Discretization functions for various ModFlow grid types
 """
 
 from mf6rtm.mf6api import Mf6API
+import math
 
 
 def total_cells_in_grid(modflow_api: Mf6API) -> int:
+    return math.prod(grid_dimensions(modflow_api))
+
+
+def grid_dimensions(modflow_api: Mf6API) -> tuple[int, ...]:
     grid_type = modflow_api.grid_type.upper()
     try:
         return __DISCRETIZATION_FUNCTIONS[grid_type](modflow_api)
@@ -17,7 +22,7 @@ def __not_supported(*args, **kargs):
     raise NotImplementedError("This grid type is not supported.")
 
 
-def __dis(api: Mf6API) -> int:
+def __dis(api: Mf6API) -> tuple[int, int, int]:
     """
     Returns the total number of grid cells from the structured rectangular
     layered grid specified in the Discretization (DIS) Package.
@@ -27,10 +32,10 @@ def __dis(api: Mf6API) -> int:
     nlay = discretization.nlay.get_data()
     nrow = discretization.nrow.get_data()
     ncol = discretization.ncol.get_data()
-    return nlay * nrow * ncol
+    return (nlay, nrow, ncol)
 
 
-def __disv(api: Mf6API) -> int:
+def __disv(api: Mf6API) -> tuple[int, int]:
     """
     Returns the total number of grid cells from the unstructured layered grid
     specified in the Discretization by Vertices (DISV) Package.
@@ -39,7 +44,7 @@ def __disv(api: Mf6API) -> int:
     discretization = simulation.get_model(simulation.model_names[0]).disv
     nlay = discretization.nlay.get_data()
     ncpl = discretization.ncpl.get_data()
-    return nlay * ncpl
+    return (nlay, ncpl)
 
 
 __DISCRETIZATION_FUNCTIONS = {
