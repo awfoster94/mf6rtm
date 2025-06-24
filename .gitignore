@@ -199,3 +199,4 @@ pixi.toml
 /autotest/test04/*
 /autotest/test05/*
 .vscode/settings.json
+/benchmark/ex6
