@@ -57,6 +57,11 @@ dependencies:
   - pylsp-mypy  # MyPy type checking for Python >=3.7.
   - fortls  # Fortran LSP, for model input files
   - jupyterlab-lsp # Provides both server extension and lab extension
+  # Testing
+  - tox
+  - pytest
+  - pytest-cov
+  - flaky
 
   # environment and package management
   - conda

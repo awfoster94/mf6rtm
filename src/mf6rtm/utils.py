@@ -4,9 +4,9 @@ import shutil
 import pandas
 
 # global variables
-endmainblock = '''\nPRINT
+endmainblock = """\nPRINT
     -reset false
-END\n'''
+END\n"""
 
 
 def solution_csv_to_dict(csv_file, header=True):
@@ -24,13 +24,18 @@ def solution_csv_to_dict(csv_file, header=True):
     """
     # Read the CSV file and convert it to a dictionary using first row as keys and columns as value (array of shape ncol)
     import csv
-    with open(csv_file, mode='r') as infile:
+
+    with open(csv_file, mode="r") as infile:
         reader = csv.reader(infile)
         # skip header assuming first line is header
         if header:
             next(reader)
 
-        data = {rows[0]: [float(i) for i in rows[1:]] for rows in reader if not rows[0].startswith('#')}
+        data = {
+            rows[0]: [float(i) for i in rows[1:]]
+            for rows in reader
+            if not rows[0].startswith("#")
+        }
         # data = {rows[0]: rows[1:] for rows in reader if rows[0].startswith('#') == False}
 
         # for key, value in data.items():
@@ -53,11 +58,15 @@ def kinetics_df_to_dict(data, header=True):
     """
     dic = {}
     # data.set_index(data.columns[0], inplace=True)
-    par_cols = [col for col in data.columns if col.startswith('par')]
+    par_cols = [col for col in data.columns if col.startswith("par")]
     for key in data.index:
         parms = [item for item in data.loc[key, par_cols] if not pandas.isna(item)]
         # print(parms)
-        dic[key] = [item for item in data.loc[key] if item not in parms and not pandas.isna(item)]
+        dic[key] = [
+            item
+            for item in data.loc[key]
+            if item not in parms and not pandas.isna(item)
+        ]
         dic[key].append(parms)
     return dic
 
@@ -75,7 +84,7 @@ def solution_df_to_dict(data, header=True):
     data : dict
         A dictionary with the first column as keys and the remaining columns as values.
     """
-    data = data.T.to_dict('list')
+    data = data.T.to_dict("list")
     for key, value in data.items():
         data[key] = [float(i) for i in value]
     return data
@@ -95,14 +104,15 @@ def equilibrium_phases_csv_to_dict(csv_file, header=True):
         A dictionary with phase names as keys and lists of saturation indices and amounts as values.
     """
     import csv
-    with open(csv_file, mode='r') as infile:
+
+    with open(csv_file, mode="r") as infile:
         reader = csv.reader(infile)
         # skip header assuming first line is header
         if header:
             next(reader)
         data = {}
         for row in reader:
-            if row[0].startswith('#'):
+            if row[0].startswith("#"):
                 continue
             if int(row[-1]) not in data:
                 # data[row[0]] = [[float(row[1]), float(row[2])]]
@@ -127,14 +137,15 @@ def surfaces_csv_to_dict(csv_file, header=True):
         A dictionary with phase names as keys and lists of saturation indices and amounts as values.
     """
     import csv
-    with open(csv_file, mode='r') as infile:
+
+    with open(csv_file, mode="r") as infile:
         reader = csv.reader(infile)
         # skip header assuming first line is header
         if header:
             next(reader)
         data = {}
         for row in reader:
-            if row[0].startswith('#'):
+            if row[0].startswith("#"):
                 continue
             if int(row[-1]) not in data:
                 # data[row[0]] = [[float(row[1]), float(row[2])]]
@@ -159,7 +170,8 @@ def kinetics_phases_csv_to_dict(csv_file, header=True):
         A dictionary with phase names as keys and lists of saturation indices and amounts as values.
     """
     import csv
-    with open(csv_file, mode='r') as infile:
+
+    with open(csv_file, mode="r") as infile:
         reader = csv.reader(infile)
         # skip header assuming first line is header
         if header:
@@ -167,16 +179,20 @@ def kinetics_phases_csv_to_dict(csv_file, header=True):
             # print(cols)
         data = {}
         for row in reader:
-            if row[0].startswith('#'):
+            if row[0].startswith("#"):
                 continue
-            rowcleaned = [i for i in row if i != '']
+            rowcleaned = [i for i in row if i != ""]
             if int(rowcleaned[-1]) not in data:
                 # data[row[0]] = [[float(row[1]), float(row[2])]]
                 data[int(rowcleaned[-1])] = {rowcleaned[0]: [float(rowcleaned[1])]}
-                data[int(rowcleaned[-1])][rowcleaned[0]].append([float(i) for i in rowcleaned[2:-1]])
+                data[int(rowcleaned[-1])][rowcleaned[0]].append(
+                    [float(i) for i in rowcleaned[2:-1]]
+                )
             else:
                 data[int(rowcleaned[-1])][rowcleaned[0]] = [float(rowcleaned[1])]
-                data[int(rowcleaned[-1])][rowcleaned[0]].append([float(i) for i in rowcleaned[2:-1]])
+                data[int(rowcleaned[-1])][rowcleaned[0]].append(
+                    [float(i) for i in rowcleaned[2:-1]]
+                )
                 # [float(i) for i in rowcleaned[1:-1]]
     return data
 
@@ -204,7 +220,7 @@ def handle_block(current_items, block_generator, i, *args, **kwargs):
     return script
 
 
-def get_compound_names(database_file, block='SOLUTION_MASTER_SPECIES'):
+def get_compound_names(database_file, block="SOLUTION_MASTER_SPECIES"):
     """Get a list of compound names from a PHREEQC database file
     Parameters
     ----------
@@ -218,21 +234,39 @@ def get_compound_names(database_file, block='SOLUTION_MASTER_SPECIES'):
         A list of compound names.
     """
     species_names = []
-    with open(database_file, 'r', errors='replace') as db:
+    with open(database_file, "r", errors="replace") as db:
         lines = db.readlines()
         in_block = False
         for line in lines:
             if block.upper() in line:
                 in_block = True
-            elif in_block and line.strip().isupper() and len(line.strip()) > 1 and '_' in line.strip():  # Stop when encountering the next keyword
+            elif (
+                in_block
+                and line.strip().isupper()
+                and len(line.strip()) > 1
+                and "_" in line.strip()
+            ):  # Stop when encountering the next keyword
                 in_block = False
             elif in_block:
-                if line.strip() and not line.startswith('#') and line.split()[0][0].isupper():  # Ignore empty lines and comments
-                    species = line.split()[0]  # The species name is the first word on the line
+                if (
+                    line.strip()
+                    and not line.startswith("#")
+                    and line.split()[0][0].isupper()
+                ):  # Ignore empty lines and comments
+                    species = line.split()[
+                        0
+                    ]  # The species name is the first word on the line
                     species_names.append(species)
-                if line.strip() and not line.startswith('#') and line.split()[0][0].isupper() and block.startswith('EXCHANGE'):
+                if (
+                    line.strip()
+                    and not line.startswith("#")
+                    and line.split()[0][0].isupper()
+                    and block.startswith("EXCHANGE")
+                ):
                     # Ignore empty lines and comments
-                    species = line.split()[-1]  # The exchange species are the last word on the line
+                    species = line.split()[
+                        -1
+                    ]  # The exchange species are the last word on the line
                     species_names.append(species)
     return species_names
 
@@ -277,7 +311,7 @@ def generate_surface_block(surface_dict, i, options=[]):
     script = f"SURFACE {i+1}\n"
     for name, values in surface_dict.items():
         script += f"    {name}"
-        script += "    "+' '.join(f"{v}" for v in values)+"\n"
+        script += "    " + " ".join(f"{v}" for v in values) + "\n"
         script += f"    -equilibrate {1}\n"  # TODO: make equilibrate a parameter from eq_solutions
         if len(options) > 0:
             for i in range(len(options)):
@@ -307,7 +341,11 @@ def generate_kinetics_block(kinetics_dict, i):
         script += f"    {species}\n"
         for k in range(len(values)):
             if isinstance(values[k], list):
-                script += f"        -{options[k]} " + ' '.join(f"{parm:.5e}" for parm in values[k])+"\n"
+                script += (
+                    f"        -{options[k]} "
+                    + " ".join(f"{parm:.5e}" for parm in values[k])
+                    + "\n"
+                )
             elif isinstance(values[k], str):
                 script += f"        -{options[k]} {values[k]}\n"
             else:
@@ -360,9 +398,9 @@ def generate_solution_block(species_dict, i, temp=25.0, water=1.0):
     elif isinstance(temp, list):
         t = f"{temp[i]}"
     script = f"SOLUTION {i+1}\n"
-    script += f'''   units mol/kgw
+    script += f"""   units mol/kgw
     water {water}
-    temp {t}\n'''
+    temp {t}\n"""
     for species, concentration in species_dict.items():
         script += f"    {species} {concentration:.5e}\n"
     script += "\nEND\n"
@@ -371,14 +409,14 @@ def generate_solution_block(species_dict, i, temp=25.0, water=1.0):
 
 def rearrange_copy_blocks(script):
     # Split the script into lines
-    lines = script.split('\n')
+    lines = script.split("\n")
     copy_blocks = []
     # end_blocks = []
     other_blocks = []
 
     # Separate the lines into COPY blocks, END blocks, and other blocks
     for line in lines:
-        if line.startswith('COPY'):
+        if line.startswith("COPY"):
             copy_blocks.append(line)
         else:
             other_blocks.append(line)
@@ -389,18 +427,20 @@ def rearrange_copy_blocks(script):
         rearranged_script.append(block)
 
     # Join the lines back together into a single script string
-    rearranged_script = '\n'.join(rearranged_script)
+    rearranged_script = "\n".join(rearranged_script)
 
     return rearranged_script
 
 
-def prep_bins(dest_path, src_path=os.path.join('bin'),  get_only=[]):
-    """Copy executables from the source path to the destination path
-    """
+def prep_bins(dest_path, src_path=os.path.join("bin"), get_only=[]):
+    """Copy executables from the source path to the destination path"""
 
     if "linux" in platform.platform().lower():
         bin_path = os.path.join(src_path, "linux")
-    elif "darwin" in platform.platform().lower() or "macos" in platform.platform().lower():
+    elif (
+        "darwin" in platform.platform().lower()
+        or "macos" in platform.platform().lower()
+    ):
         bin_path = os.path.join(src_path, "mac")
     else:
         bin_path = os.path.join(src_path, "win")
@@ -415,4 +455,8 @@ def prep_bins(dest_path, src_path=os.path.join('bin'),  get_only=[]):
             except IOError:
                 continue
         shutil.copy2(os.path.join(bin_path, f), os.path.join(dest_path, f))
-    return
+    return sorted(files)
+
+
+def get_indices(element, lst):
+    return [i for i, x in enumerate(lst) if x == element]
