@@ -455,7 +455,7 @@ def prep_bins(dest_path, src_path=os.path.join("bin"), get_only=[]):
             except IOError:
                 continue
         shutil.copy2(os.path.join(bin_path, f), os.path.join(dest_path, f))
-    return files
+    return sorted(files)
 
 
 def get_indices(element, lst):
