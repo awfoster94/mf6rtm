@@ -336,7 +336,7 @@ def generate_kinetics_block(kinetics_dict, i):
         The KINETICS block as a string.
     """
     script = f"KINETICS {i+1}\n"
-    options = ["m0", "parms", "formula"]
+    options = ["m0", "parms", "formula", "steps"]
     for species, values in kinetics_dict.items():
         script += f"    {species}\n"
         for k in range(len(values)):
