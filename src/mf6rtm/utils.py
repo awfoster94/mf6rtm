@@ -36,6 +36,32 @@ def concentration_volbulk_to_volwater(conc_volbulk, porosity):
     conc_volwater = conc_volbulk * (1 / porosity)
     return conc_volwater
 
+def add_charge_flag_to_species_in_solution(script: str, species: list[str] = ["pH"]) -> str:
+    """Add 'charge' to species lines inside SOLUTION blocks in a PHREEQC input string."""
+    lines = script.splitlines()
+    modified_lines = []
+
+    inside_solution = False
+    for line in lines:
+        stripped = line.strip()
+
+        if stripped.upper().startswith("SOLUTION"):
+            inside_solution = True
+        elif stripped.upper().startswith("END"):
+            inside_solution = False
+
+        # Only modify if we're inside a SOLUTION block
+        if inside_solution:
+            for target in species:
+                if stripped.startswith(target):
+                    if "charge" not in stripped:
+                        line = line.rstrip() + " charge"
+                    break
+
+        modified_lines.append(line)
+
+    return "\n".join(modified_lines)
+
 def solution_csv_to_dict(csv_file, header=True):
     """Read a solution CSV file and convert it to a dictionary
     Parameters
