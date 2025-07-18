@@ -506,7 +506,7 @@ class Mup3d(object):
             file.write(script)
         return script
 
-    def initialize(self, nthreads=1):
+    def initialize(self, nthreads=1, add_charge_flag=False):
         '''Initialize a PhreeqcRM object to calculate initial concentrations
         from a PHREEQC inputs, adding the following attributes to the Mup3d
         object:
@@ -526,7 +526,7 @@ class Mup3d(object):
 
         # create phinp
         # check if phinp.dat is in wd
-        phinp = self.generate_phreeqc_script()
+        phinp = self.generate_phreeqc_script(add_charge_flag=add_charge_flag)
 
         # initialize phreeqccrm object
         self.phreeqc_rm = phreeqcrm.PhreeqcRM(self.nxyz, nthreads)
