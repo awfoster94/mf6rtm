@@ -10,8 +10,9 @@ from typing import Union
 import pandas as pd
 import numpy as np
 import phreeqcrm
-from mf6rtm.mf6rtm import solve, concentration_l_to_m3, DT_FMT, time_units_dict
-from . import utils
+from mf6rtm.solver import solve, concentration_l_to_m3, DT_FMT, time_units_dict
+from mf6rtm import utils
+from mf6rtm.config import MF6RTMConfig
 from phreeqcrm import yamlphreeqcrm
 import yaml
 
@@ -258,6 +259,7 @@ class Mup3d(object):
         self.phinp = None
         self.components = None
         self.fixed_components = None
+        self.config = MF6RTMConfig() #default config
 
         # Set grid parameters for DIS
         if all(param is not None for param in [nlay, nrow, ncol]):
@@ -618,6 +620,27 @@ class Mup3d(object):
         self._write_phreeqc_init_file()
         print('Phreeqc initialized')
         return
+    
+    def set_config(self, **kwargs) -> MF6RTMConfig:
+        """Create and store a config object."""
+        self.config = MF6RTMConfig(**kwargs)
+        return self.config
+    
+    def get_config(self):
+        """Retrieve config object"""
+        return self.config.to_dict()
+
+    def save_config(self):
+        """Save config toml file"""
+        assert self.wd is not None, "Model directory not specified"
+        config_path = self.wd / "mf6rtm.toml"
+        self.config.save_to_file(filepath=config_path)
+        return config_path
+    
+    def write_simulation(self):
+        self._write_phreeqc_init_file()
+        self.save_config()
+        return 
 
     def initialize_chem_stress(
         self,
@@ -806,6 +829,6 @@ class Mup3d(object):
         self.phreeqcrm_yaml = phreeqcrm_yaml
         return
 
-    def run(self, reactive = True, nthread=1):
+    def run(self, reactive = None, nthread=1):
         '''Wrapper function to run the MF6RTM model'''
         return solve(self.wd, reactive=reactive, nthread=nthread)

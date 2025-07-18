@@ -14,12 +14,11 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 from PIL import Image
 import pandas as pd
 import numpy as np
-
-# from time import sleep
 from mf6rtm.mf6api import Mf6API
 from mf6rtm.phreeqcbmi import PhreeqcBMI
 from mf6rtm import utils
 from mf6rtm.discretization import total_cells_in_grid
+from mf6rtm.config import MF6RTMConfig
 
 # global variables
 DT_FMT = "%Y-%m-%d %H:%M:%S"
@@ -33,6 +32,10 @@ time_units_dict = {
     "unknown": 1,  # if unknown assume seconds
 }
 
+def check_config_file(wd: PathLike) -> tuple[PathLike, PathLike]:
+    assert os.path.exists(
+        os.path.join(wd, "mf6rtm.toml")
+        ), "mf6rtm.toml not found in model directory"
 
 def prep_to_run(wd: PathLike) -> tuple[PathLike, PathLike]:
     """
@@ -57,6 +60,7 @@ def prep_to_run(wd: PathLike) -> tuple[PathLike, PathLike]:
         os.path.join(wd, "mf6rtm.yaml")
     ), "mf6rtm.yaml not found in model directory"
 
+    check_config_file(wd)
     nam = [f for f in os.listdir(wd) if f.endswith(".nam")]
     assert "mfsim.nam" in nam, "mfsim.nam file not found in model directory"
     assert "gwf.nam" in nam, "gwf.nam file not found in model directory"
@@ -66,12 +70,18 @@ def prep_to_run(wd: PathLike) -> tuple[PathLike, PathLike]:
     return yamlfile, dll
 
 
-def solve(wd: PathLike, reactive: bool = True, nthread: int = 1) -> bool:
+def solve(wd: PathLike, reactive: None, nthread: int = 1) -> bool:
     """Wrapper to prepare and call solve functions"""
 
     mf6rtm = initialize_interfaces(wd, nthread=nthread)
-    if not reactive:
+    if reactive is not None and isinstance(reactive, bool) and reactive != mf6rtm.reactive:
+        print(
+                f"Mode changed from "
+                f"{'reactive' if mf6rtm.reactive else 'non-reactive'} to "
+                f"{'reactive' if reactive else 'non-reactive'}\n"
+            )
         mf6rtm._set_reactive(reactive)
+    mf6rtm.print_warning_user_active()
     success = mf6rtm._solve()
     return success
 
@@ -156,7 +166,6 @@ class Mf6RTM(object):
         self.charge_offset = 0.0
         self.wd = wd
         self.sout_fname = "sout.csv"
-        self.reactive = True
         self.epsaqu = 0.0
         self.fixed_components = None
         self.get_selected_output_on = True
@@ -169,6 +178,16 @@ class Mf6RTM(object):
         # set time conversion factor
         self.set_time_conversion()
 
+        self.config = MF6RTMConfig.from_toml_file(Path(wd/"mf6rtm.toml"))
+        self.reactive = self.config.reactive
+
+    def print_warning_user_active(self):
+        if self.config.reaction_timing == 'user':
+            print(f"WARNING: Running reaction only in the following periods and time steps:")
+            for period, timestep in self.config.tsteps:
+                print(f"  Period {period}, Time step {timestep}")
+        else:
+            return
 
     def get_saturation_from_mf6(self) -> dict[Any, np.ndarray]:
         """
@@ -486,6 +505,30 @@ class Mf6RTM(object):
         """Alias for the solve method to provide backward compatibility"""
         return self.solve()
 
+    def check_reactive_tstep(self) -> bool:
+        """
+        Check if the current timestep should be reactive based on configuration.
+        
+        Returns:
+            bool: True if current timestep should be reactive, False otherwise
+        """
+        # Early return if not in reactive mode
+
+        if not self.reactive:
+            return False
+        
+        # Get current timestep
+        current_tstep = [self.mf6api.kper, self.mf6api.kstp]
+        
+        # Check strategy
+        if self.config.reaction_timing == 'all':
+            return True
+        elif self.config.reaction_timing == 'user':
+            return current_tstep in self.config.tsteps
+        else:
+            # Handle unknown strategy
+            print(f"Warning: Unknown strategy '{self.config.reaction_timing}'. Defaulting to reactive.")
+            return True
     def solve(self) -> bool:
         """Solve the model"""
         success = False  # initialize success flag
@@ -495,12 +538,12 @@ class Mf6RTM(object):
         # check sout was created
         assert self._check_sout_exist(), f"{self.sout_fname} not found"
 
-        print("Starting transport solution at {0}".format(sim_start.strftime(DT_FMT)))
+        print("Starting Solution at {0}".format(sim_start.strftime(DT_FMT)))
         ctime = self._set_ctime()
         etime = self._set_etime()
         while ctime < etime:
-            temp_time = datetime.now()
-            print(f"Starting solution at {temp_time.strftime(DT_FMT)}")
+            # temp_time = datetime.now()
+            # print(f"Starting solution at {temp_time.strftime(DT_FMT)}")
             # length of the current solve time
             dt = self._set_time_step()
             self.mf6api.prepare_time_step(dt)
@@ -508,9 +551,9 @@ class Mf6RTM(object):
 
             # get saturation
             self.get_saturation_from_mf6()
-
-            if self.reactive:
-                # reaction block
+            # check_reactive_kstp()
+            if self.check_reactive_tstep():
+                # print(self.check_reactive_tstep)
                 c_dbl_vect = self._transfer_array_to_phreeqcrm()
                 self._set_conc_at_current_kstep(c_dbl_vect)
                 if ctime == 0.0:
@@ -536,14 +579,13 @@ class Mf6RTM(object):
 
             self.mf6api.finalize_time_step()
             ctime = self._set_ctime()  # update the current time tracking
-
         sim_end = datetime.now()
         td = (sim_end - sim_start).total_seconds() / 60.0
 
         self.mf6api._check_num_fails()
 
         print(
-            "\nReactive transport solution finished at {0} --- it took: {1:10.5G} mins".format(
+            "\nSolution finished at {0} --- it took: {1:10.5G} mins".format(
                 sim_end.strftime(DT_FMT), td
             )
         )

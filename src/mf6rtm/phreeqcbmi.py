@@ -70,9 +70,9 @@ class PhreeqcBMI(phreeqcrm.BMIPhreeqcRM):
             if len(inact) > 0:
                 for i in inact:
                     sat[i] = 0
-            print(
-                f"{'Cells sent to reactions':<25} | {self.GetGridCellCount()-len(inact):<0}/{self.GetGridCellCount():<15}"
-            )
+            # print(
+            #     f"{'Cells sent to reactions':<25} | {self.GetGridCellCount()-len(inact):<0}/{self.GetGridCellCount():<15}"
+            # )
             self.SetSaturation(sat)
 
         print_selected_output_on = True
@@ -82,16 +82,16 @@ class PhreeqcBMI(phreeqcrm.BMIPhreeqcRM):
         # reactions loop
         sol_start = datetime.now()
 
-        message = f"{'Reaction loop':<25} | {'Stress period:':<15} {self.kper:<5} | {'Time step:':<15} {self.kstp:<10} | {'Running ...':<10}"
+        message = f"{'Reactions':<15} | {'Stress period:':<15} {self.kper:<5} | {'Time step:':<15} {self.kstp:<10} | {'Running ...':<10}"
         self.LogMessage(message + "\n")  # log message
-        print(message)
+        # print(message)
         # self.ScreenMessage(message)
         # status = self.RunCells()
         # if status < 0:
         #     print('Error in RunCells: {0}'.format(status))
         self.update()
         td = (datetime.now() - sol_start).total_seconds() / 60.0
-        message = f"{'Reaction loop':<25} | {'Stress period:':<15} {self.kper:<5} | {'Time step:':<15} {self.kstp:<10} | {'Completed in :':<10} {td//60:.0f} min {td%60:.4f} sec\n\n"
+        message = f"{'Reactions':<15} | {'Stress period:':<15} {self.kper:<5} | {'Time step:':<15} {self.kstp:<10} | {'Completed in :':<10}  {td//60:.0f} min {td%60:10.2e} sec"
         self.LogMessage(message)
         print(message)
         # self.ScreenMessage(message)
