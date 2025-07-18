@@ -620,12 +620,12 @@ class Mup3d(object):
         self.write_simulation()
         print('Phreeqc initialized')
         return
-    
+
     def set_config(self, **kwargs) -> MF6RTMConfig:
         """Create and store a config object."""
         self.config = MF6RTMConfig(**kwargs)
         return self.config
-    
+
     def get_config(self):
         """Retrieve config object"""
         return self.config.to_dict()
@@ -636,12 +636,12 @@ class Mup3d(object):
         config_path = self.wd / "mf6rtm.toml"
         self.config.save_to_file(filepath=config_path)
         return config_path
-    
+
     def write_simulation(self):
         self._write_phreeqc_init_file()
         self.save_config()
         print(f"Simulation saved in {self.wd}")
-        return 
+        return
 
     def initialize_chem_stress(
         self,

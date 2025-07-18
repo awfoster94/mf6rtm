@@ -508,7 +508,7 @@ class Mf6RTM(object):
     def check_reactive_tstep(self) -> bool:
         """
         Check if the current timestep should be reactive based on configuration.
-        
+
         Returns:
             bool: True if current timestep should be reactive, False otherwise
         """
@@ -516,10 +516,10 @@ class Mf6RTM(object):
 
         if not self.reactive:
             return False
-        
+
         # Get current timestep
         current_tstep = [self.mf6api.kper, self.mf6api.kstp]
-        
+
         # Check strategy
         if self.config.reaction_timing == 'all':
             return True

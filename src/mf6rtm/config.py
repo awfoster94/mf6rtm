@@ -5,10 +5,9 @@ import numpy as np
 
 class MF6RTMConfig:
     """MF6RTM Configuration class similar to FloPy package structure.
-    
-    This class provides a FloPy-style interface for configuring MF6RTM 
+    This class provides a FloPy-style interface for configuring MF6RTM
     reaction timing parameters.
-    
+
     Parameters
     ----------
     reaction_timing : str, optional
@@ -20,7 +19,7 @@ class MF6RTMConfig:
         List of (kper, kstp) tuples specifying when reactions should be calculated.
         Only used when reaction_timing='user'. Default is empty list.
         kper is stress period (1-based), kstp is time step (1-based).
-    
+
     Attributes
     ----------
     reaction_timing : str
@@ -28,13 +27,13 @@ class MF6RTMConfig:
     tsteps : List[Tuple[int, int]]
         List of time steps for reaction calculations.
     """
-    
-    def __init__(self, 
+
+    def __init__(self,
                  reactive: bool = True,
-                 reaction_timing: str = 'all', 
+                 reaction_timing: str = 'all',
                  tsteps: List[Tuple[int, int]] = None):
         """Initialize MF6RTM configuration.
-        
+
         Parameters
         ----------
         reaction_timing : str, optional
@@ -45,71 +44,70 @@ class MF6RTMConfig:
         self.reactive = reactive
         self.reaction_timing = reaction_timing
         self.tsteps = tsteps if tsteps is not None else []
-        
+
         # Validate inputs
         self._validate_reaction_timing()
         self._validate_tsteps()
-    
+
     def _validate_reaction_timing(self):
         """Validate reaction_timing parameter."""
         valid_options = ['all', 'user', 'adaptive']
         if self.reaction_timing not in valid_options:
             raise ValueError(f"reaction_timing must be one of {valid_options}, "
                            f"got '{self.reaction_timing}'")
-    
+
     def _validate_tsteps(self):
         """Validate tsteps parameter."""
         if not isinstance(self.tsteps, list):
             raise ValueError("tsteps must be a list")
-        
+
         for i, tstep in enumerate(self.tsteps):
             if not isinstance(tstep, (tuple, list)) or len(tstep) != 2:
                 raise ValueError(f"tsteps[{i}] must be a tuple/list of length 2")
-            
+
             kper, kstp = tstep
             if not isinstance(kper, int) or not isinstance(kstp, int):
                 raise ValueError(f"tsteps[{i}] must contain integers")
-            
             if kper < 1 or kstp < 1:
                 raise ValueError(f"tsteps[{i}]: kper and kstp must be >= 1")
-    
+
     def get_tsteps_for_period(self, kper: int) -> List[int]:
         """Get time steps for a specific stress period.
-        
+
         Parameters
         ----------
         kper : int
             Stress period number (1-based).
-            
+
         Returns
         -------
         List[int]
             List of time step numbers for the given stress period.
-        
+
         Examples
         --------
-        >>> config = MF6RTMConfig(reaction_timing='user', 
+        >>> config = MF6RTMConfig(reaction_timing='user',
         ...                       tsteps=[(1, 1), (1, 10), (2, 5)])
         >>> config.get_tsteps_for_period(1)
         [1, 10]
         """
         return sorted([kstp for kp, kstp in self.tsteps if kp == kper])
-    
+
     def is_reaction_tstep(self, kper: int, kstp: int) -> bool:
         """Check if reactions should be calculated at a specific time step.
-        
+
         Parameters
         ----------
         kper : int
             Stress period number (1-based).
         kstp : int
             Time step number (1-based).
-            
+
         Returns
         -------
         bool
             True if reactions should be calculated at this time step.
-        
+
         Examples
         --------
         >>> config = MF6RTMConfig(reaction_timing='user', tsteps=[(1, 1)])
@@ -123,14 +121,14 @@ class MF6RTMConfig:
         elif self.reaction_timing == 'user':
             return (kper, kstp) in self.tsteps
         elif self.reaction_timing == 'adaptive':
-            # Placeholder for adaptive 
+            # Placeholder for adaptive
             return True
         else:
             return False
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary for TOML output.
-        
+
         Returns
         -------
         Dict[str, Any]
@@ -146,22 +144,21 @@ class MF6RTMConfig:
             }
         }
         return dict
-        
-    
+
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> 'MF6RTMConfig':
         """Create configuration from dictionary.
-        
+
         Parameters
         ----------
         config_dict : Dict[str, Any]
             Dictionary loaded from TOML file.
-            
+
         Returns
         -------
         MF6RTMConfig
             New configuration instance.
-            
+
         Raises
         ------
         ValueError
@@ -169,26 +166,26 @@ class MF6RTMConfig:
         """
         if 'reaction_timing' not in config_dict:
             raise ValueError("Missing required 'reaction_timing' block")
-        
+
         rt_config = config_dict['reaction_timing']
-        
+
         # Extract strategy
         strategy = rt_config.get('strategy', 'all')
-        
+
         # Extract tsteps
         tsteps = rt_config.get('tsteps')
-        
+
         return cls(reaction_timing=strategy, tsteps=tsteps)
-    
+
     @classmethod
     def from_toml_file(cls, filepath: str) -> 'MF6RTMConfig':
         """Load configuration from TOML file.
-        
+
         Parameters
         ----------
         filepath : str
             Path to TOML configuration file.
-            
+
         Returns
         -------
         MF6RTMConfig
@@ -202,10 +199,10 @@ class MF6RTMConfig:
             raise FileNotFoundError(f"Configuration file not found: {filepath}")
         except toml.TomlDecodeError as e:
             raise ValueError(f"Invalid TOML format in {filepath}: {e}")
-    
+
     def save_to_file(self, filepath: str):
         """Save configuration to TOML file.
-        
+
         Parameters
         ----------
         filepath : str
@@ -215,23 +212,23 @@ class MF6RTMConfig:
         with open(filepath, 'w', encoding='utf-8') as f:
             toml.dump(config_dict, f)
         # print(f"Configuration saved to: {filepath}")
-    
+
     def __repr__(self):
         """String representation of the configuration."""
         return (f"MF6RTMConfig(reaction_timing='{self.reaction_timing}', "
                 f"tsteps={self.tsteps})")
-    
+
     def __str__(self):
         """Detailed string representation."""
         lines = [f"MF6RTM will run with the following configuration:"]
         lines.append(f"  Reactive: {self.reactive}")
         lines.append(f"  Reaction timing: {self.reaction_timing}")
-        
+
         if self.reaction_timing == 'user' and self.tsteps:
             lines.append(f"  User-defined time steps ({len(self.tsteps)} total):")
             for kper, kstp in sorted(self.tsteps):
                 lines.append(f"    Period {kper}, Step {kstp}")
         elif self.reaction_timing == 'all':
             lines.append("  Reactions calculated at all time steps")
-        
+
         return '\n'.join(lines)
