@@ -178,7 +178,7 @@ class Mf6RTM(object):
         # set time conversion factor
         self.set_time_conversion()
 
-        self.config = MF6RTMConfig.from_toml_file(self.path/"mf6rtm.toml")
+        self.config = MF6RTMConfig.from_toml_file(self.wd/"mf6rtm.toml")
         self.reactive = self.config.reactive
 
     def print_warning_user_active(self):
