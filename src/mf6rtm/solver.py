@@ -2,7 +2,7 @@
 phreeqcrm.
 """
 
-from typing import Any
+from typing import Any, Union
 from pathlib import Path
 import os
 from os import PathLike
@@ -70,7 +70,7 @@ def prep_to_run(wd: PathLike) -> tuple[PathLike, PathLike]:
     return yamlfile, dll
 
 
-def solve(wd: PathLike, reactive: None, nthread: int = 1) -> bool:
+def solve(wd: PathLike, reactive: Union[bool, None] = None, nthread: int = 1) -> bool:
     """Wrapper to prepare and call solve functions"""
 
     mf6rtm = initialize_interfaces(wd, nthread=nthread)
@@ -666,36 +666,6 @@ def mrbeaker() -> str:
             mrbeaker += ascii_chars[pixel_value // 64]
         mrbeaker += "\n"
     return mrbeaker
-
-
-# def flatten_list(xss):
-#     """Flatten a list of lists"""
-#     return [x for xs in xss for x in xs]
-
-
-# def concentration_l_to_m3(x):
-#     """Convert M/L to M/m3"""
-#     c = x * 1e3
-#     return c
-
-
-# def concentration_m3_to_l(x):
-#     """Convert M/L to M/m3"""
-#     c = x * 1e-3
-#     return c
-
-
-# def concentration_to_massrate(q, conc):
-#     """Calculate mass rate from rate (L3/T) and concentration (M/L3)"""
-#     mrate = q * conc  # M/T
-#     return mrate
-
-
-# def concentration_volbulk_to_volwater(conc_volbulk, porosity):
-#     """Calculate concentrations as volume of pore water from bulk volume and porosity"""
-#     conc_volwater = conc_volbulk * (1 / porosity)
-#     return conc_volwater
-
 
 def run_cmd():
     # get the current directory
