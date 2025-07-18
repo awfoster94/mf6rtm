@@ -10,7 +10,7 @@ from typing import Union
 import pandas as pd
 import numpy as np
 import phreeqcrm
-from mf6rtm.solver import solve, concentration_l_to_m3, DT_FMT, time_units_dict
+from mf6rtm.solver import solve, DT_FMT, time_units_dict
 from mf6rtm import utils
 from mf6rtm.config import MF6RTMConfig
 from phreeqcrm import yamlphreeqcrm
@@ -611,13 +611,13 @@ class Mup3d(object):
         for i, c in enumerate(components):
             # where thelement is a component name (c)
             get_conc = np.reshape(conc[i], self.grid_shape)
-            get_conc = concentration_l_to_m3(get_conc)
+            get_conc = utils.concentration_l_to_m3(get_conc)
             if c.lower() == 'charge':
                 get_conc += self.charge_offset
             self.sconc[c] = get_conc
 
         self.set_reaction_temp()
-        self._write_phreeqc_init_file()
+        self.write_simulation()
         print('Phreeqc initialized')
         return
     
@@ -640,6 +640,7 @@ class Mup3d(object):
     def write_simulation(self):
         self._write_phreeqc_init_file()
         self.save_config()
+        print(f"Simulation saved in {self.wd}")
         return 
 
     def initialize_chem_stress(
@@ -733,7 +734,7 @@ class Mup3d(object):
 
         # status = phreeqc_rm.RunCells()
         c_dbl_vect = phreeqc_rm.GetConcentrations()
-        c_dbl_vect = concentration_l_to_m3(c_dbl_vect)
+        c_dbl_vect = utils.concentration_l_to_m3(c_dbl_vect)
 
         c_dbl_vect = [c_dbl_vect[i:i + nxyz_spd] for i in range(0, len(c_dbl_vect), nxyz_spd)]
 

@@ -353,12 +353,12 @@ class Mf6RTM(object):
             if gwt_model_name.lower() == "charge":
                 self.mf6api.set_value(
                     f"{gwt_model_name.upper()}/X",
-                    concentration_l_to_m3(conc_dict[c]) + self.charge_offset,
+                    utils.concentration_l_to_m3(conc_dict[c]) + self.charge_offset,
                 )
             else:
                 self.mf6api.set_value(
                     f"{gwt_model_name.upper()}/X",
-                    concentration_l_to_m3(conc_dict[c]),
+                    utils.concentration_l_to_m3(conc_dict[c]),
                 )
         return c_dbl_vect
 
@@ -396,7 +396,7 @@ class Mf6RTM(object):
         for c in self.phreeqcbmi.components:
             if c.lower() == "charge":
                 mf6_conc_array.append(
-                    concentration_m3_to_l(
+                    utils.concentration_m3_to_l(
                         self.mf6api.get_value(
                             self.mf6api.get_var_address(
                                 "X",
@@ -409,7 +409,7 @@ class Mf6RTM(object):
 
             else:
                 mf6_conc_array.append(
-                    concentration_m3_to_l(
+                    utils.concentration_m3_to_l(
                         self.mf6api.get_value(
                             self.mf6api.get_var_address(
                                 "X",
@@ -668,33 +668,33 @@ def mrbeaker() -> str:
     return mrbeaker
 
 
-def flatten_list(xss):
-    """Flatten a list of lists"""
-    return [x for xs in xss for x in xs]
+# def flatten_list(xss):
+#     """Flatten a list of lists"""
+#     return [x for xs in xss for x in xs]
 
 
-def concentration_l_to_m3(x):
-    """Convert M/L to M/m3"""
-    c = x * 1e3
-    return c
+# def concentration_l_to_m3(x):
+#     """Convert M/L to M/m3"""
+#     c = x * 1e3
+#     return c
 
 
-def concentration_m3_to_l(x):
-    """Convert M/L to M/m3"""
-    c = x * 1e-3
-    return c
+# def concentration_m3_to_l(x):
+#     """Convert M/L to M/m3"""
+#     c = x * 1e-3
+#     return c
 
 
-def concentration_to_massrate(q, conc):
-    """Calculate mass rate from rate (L3/T) and concentration (M/L3)"""
-    mrate = q * conc  # M/T
-    return mrate
+# def concentration_to_massrate(q, conc):
+#     """Calculate mass rate from rate (L3/T) and concentration (M/L3)"""
+#     mrate = q * conc  # M/T
+#     return mrate
 
 
-def concentration_volbulk_to_volwater(conc_volbulk, porosity):
-    """Calculate concentrations as volume of pore water from bulk volume and porosity"""
-    conc_volwater = conc_volbulk * (1 / porosity)
-    return conc_volwater
+# def concentration_volbulk_to_volwater(conc_volbulk, porosity):
+#     """Calculate concentrations as volume of pore water from bulk volume and porosity"""
+#     conc_volwater = conc_volbulk * (1 / porosity)
+#     return conc_volwater
 
 
 def run_cmd():

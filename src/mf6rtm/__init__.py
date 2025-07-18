@@ -12,6 +12,8 @@ from mf6rtm import (
     utils,
 )
 
-from mf6rtm.solver import run_cmd
+from mf6rtm.solver import run_cmd, Mf6RTM
+from mf6rtm.mf6api import Mf6API
+from mf6rtm.phreeqcbmi import PhreeqcBMI
 
 __author__ = "Pablo Ortega"
