@@ -164,7 +164,7 @@ class Mf6RTM(object):
         self.mf6api = mf6api
         self.phreeqcbmi = phreeqcbmi
         self.charge_offset = 0.0
-        self.wd = wd
+        self.wd = Path(wd)
         self.sout_fname = "sout.csv"
         self.epsaqu = 0.0
         self.fixed_components = None
@@ -178,7 +178,7 @@ class Mf6RTM(object):
         # set time conversion factor
         self.set_time_conversion()
 
-        self.config = MF6RTMConfig.from_toml_file(Path(wd/"mf6rtm.toml"))
+        self.config = MF6RTMConfig.from_toml_file(self.path/"mf6rtm.toml")
         self.reactive = self.config.reactive
 
     def print_warning_user_active(self):
