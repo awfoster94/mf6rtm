@@ -500,7 +500,7 @@ class Mup3d(object):
                 script += source.read()
 
         if add_charge_flag:
-            utils.add_charge_flag_to_species_in_solution()
+            script = utils.add_charge_flag_to_species_in_solution(script)
 
         with open(filename, 'w') as file:
             file.write(script)
