@@ -60,7 +60,7 @@ class MF6RTMConfig:
         """Validate tsteps parameter."""
         if not isinstance(self.tsteps, list):
             raise ValueError("tsteps must be a list")
-
+        normalized = []
         for i, tstep in enumerate(self.tsteps):
             if not isinstance(tstep, (tuple, list)) or len(tstep) != 2:
                 raise ValueError(f"tsteps[{i}] must be a tuple/list of length 2")
@@ -70,9 +70,10 @@ class MF6RTMConfig:
                 raise ValueError(f"tsteps[{i}] must contain integers")
             if kper < 1 or kstp < 1:
                 raise ValueError(f"tsteps[{i}]: kper and kstp must be 1-indexed")
+            normalized.append((kper, kstp))  # force into tuple
         # Ensure (1, 1) is included
-        if (1, 1) not in self.tsteps:
-            self.tsteps = [(1, 1)] + self.tsteps
+        if (1, 1) not in normalized:
+            normalized.insert(0, (1, 1))
 
 
     def get_tsteps_for_period(self, kper: int) -> List[int]:
