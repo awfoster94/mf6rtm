@@ -68,8 +68,6 @@ class MF6RTMConfig:
             kper, kstp = tstep
             if not isinstance(kper, int) or not isinstance(kstp, int):
                 raise ValueError(f"tsteps[{i}] must contain integers")
-            if kper < 1 or kstp < 1:
-                raise ValueError(f"tsteps[{i}]: kper and kstp must be >= 1")
 
     def get_tsteps_for_period(self, kper: int) -> List[int]:
         """Get time steps for a specific stress period.
