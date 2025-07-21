@@ -50,14 +50,22 @@ class Block:
             Initial condition concentrations. Default is None.
         """
         self.data = data
-        self.names = None
         self.ic = ic  #: None means no initial condition (-1)
         self.eq_solutions = []
         self.options = []
+        self.get_names()
 
     def get_names(self):
-        self.data 
-        ...
+        '''Get the block names or phases.
+        '''        
+        if isinstance(self, Solutions):
+            self.names = sorted(list(self.data.keys()))
+        else:
+            block_names = []
+            for block_num in self.data:
+                block_names.extend(list(self.data[block_num].keys()))
+            self.names = sorted(list(set(block_names)))
+        return self.names
 
     def set_ic(self, ic: Union[int, float, np.ndarray]):
         '''Set the initial condition for the block.
