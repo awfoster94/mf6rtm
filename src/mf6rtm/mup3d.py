@@ -404,7 +404,7 @@ class Mup3d(object):
             print('Using temperatue of {} from SOLUTION 1 for all cells'.format(rx_temp[0]))
         self.reaction_temp = rx_temp
         return rx_temp
-    
+
     def generate_phreeqc_script(self, add_charge_flag=False):
         """
         Generates the phinp file for the MF6RTM model.

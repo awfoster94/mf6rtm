@@ -529,6 +529,7 @@ class Mf6RTM(object):
             # Handle unknown strategy
             print(f"Warning: Unknown strategy '{self.config.reaction_timing}'. Defaulting to reactive.")
             return True
+
     def solve(self) -> bool:
         """Solve the model"""
         success = False  # initialize success flag
