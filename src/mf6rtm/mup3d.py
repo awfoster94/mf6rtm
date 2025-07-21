@@ -10,8 +10,9 @@ from typing import Union
 import pandas as pd
 import numpy as np
 import phreeqcrm
-from mf6rtm.mf6rtm import solve, concentration_l_to_m3, DT_FMT, time_units_dict
-from . import utils
+from mf6rtm.solver import solve, DT_FMT, time_units_dict
+from mf6rtm import utils
+from mf6rtm.config import MF6RTMConfig
 from phreeqcrm import yamlphreeqcrm
 import yaml
 
@@ -258,6 +259,7 @@ class Mup3d(object):
         self.phinp = None
         self.components = None
         self.fixed_components = None
+        self.config = MF6RTMConfig() #default config
 
         # Set grid parameters for DIS
         if all(param is not None for param in [nlay, nrow, ncol]):
@@ -403,7 +405,7 @@ class Mup3d(object):
         self.reaction_temp = rx_temp
         return rx_temp
 
-    def generate_phreeqc_script(self):
+    def generate_phreeqc_script(self, add_charge_flag=False):
         """
         Generates the phinp file for the MF6RTM model.
         """
@@ -497,11 +499,14 @@ class Mup3d(object):
                 script += '\n'
                 script += source.read()
 
+        if add_charge_flag:
+            script = utils.add_charge_flag_to_species_in_solution(script)
+
         with open(filename, 'w') as file:
             file.write(script)
         return script
 
-    def initialize(self, nthreads=1):
+    def initialize(self, nthreads=1, add_charge_flag=False):
         '''Initialize a PhreeqcRM object to calculate initial concentrations
         from a PHREEQC inputs, adding the following attributes to the Mup3d
         object:
@@ -521,7 +526,7 @@ class Mup3d(object):
 
         # create phinp
         # check if phinp.dat is in wd
-        phinp = self.generate_phreeqc_script()
+        phinp = self.generate_phreeqc_script(add_charge_flag=add_charge_flag)
 
         # initialize phreeqccrm object
         self.phreeqc_rm = phreeqcrm.PhreeqcRM(self.nxyz, nthreads)
@@ -609,14 +614,37 @@ class Mup3d(object):
         for i, c in enumerate(components):
             # where thelement is a component name (c)
             get_conc = np.reshape(conc[i], self.grid_shape)
-            get_conc = concentration_l_to_m3(get_conc)
+            get_conc = utils.concentration_l_to_m3(get_conc)
             if c.lower() == 'charge':
                 get_conc += self.charge_offset
             self.sconc[c] = get_conc
 
         self.set_reaction_temp()
-        self._write_phreeqc_init_file()
+        self.write_simulation()
         print('Phreeqc initialized')
+        return
+
+    def set_config(self, **kwargs) -> MF6RTMConfig:
+        """Create and store a config object."""
+        self.config = MF6RTMConfig(**kwargs)
+        return self.config
+
+    def get_config(self):
+        """Retrieve config object"""
+        return self.config.to_dict()
+
+    def save_config(self):
+        """Save config toml file"""
+        assert self.wd is not None, "Model directory not specified"
+        config_path = self.wd / "mf6rtm.toml"
+        self.config.save_to_file(filepath=config_path)
+        return config_path
+
+    def write_simulation(self):
+        """write phreqcrm simulation and configuration files"""
+        self._write_phreeqc_init_file()
+        self.save_config()
+        print(f"Simulation saved in {self.wd}")
         return
 
     def initialize_chem_stress(
@@ -710,7 +738,7 @@ class Mup3d(object):
 
         # status = phreeqc_rm.RunCells()
         c_dbl_vect = phreeqc_rm.GetConcentrations()
-        c_dbl_vect = concentration_l_to_m3(c_dbl_vect)
+        c_dbl_vect = utils.concentration_l_to_m3(c_dbl_vect)
 
         c_dbl_vect = [c_dbl_vect[i:i + nxyz_spd] for i in range(0, len(c_dbl_vect), nxyz_spd)]
 
@@ -806,6 +834,6 @@ class Mup3d(object):
         self.phreeqcrm_yaml = phreeqcrm_yaml
         return
 
-    def run(self, reactive = True, nthread=1):
+    def run(self, reactive = None, nthread=1):
         '''Wrapper function to run the MF6RTM model'''
         return solve(self.wd, reactive=reactive, nthread=nthread)

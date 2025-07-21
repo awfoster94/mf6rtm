@@ -43,8 +43,8 @@ class Mf6API(modflowapi.ModflowApi):
 
         self.kper = stress_period
         self.kstp = time_step
-        msg = f"{'Transport loop':<25} | {'Stress period:':<15} {stress_period:<5} | {'Time step:':<15} {time_step:<10} | {'Running ...':<10}"
-        print(msg)
+        msg = f"{'Transport':<15} | {'Stress period:':<15} {stress_period:<5} | {'Time step:':<15} {time_step:<10} | {'Running ...':<10}"
+        # print(msg)
         # mf6 transport loop block
         for sln in range(1, self.nsln + 1):
             # if self.fixed_components is not None and modelnmes[sln-1] in self.fixed_components:
@@ -80,7 +80,7 @@ class Mf6API(modflowapi.ModflowApi):
                 pass
         td = (datetime.now() - sol_start).total_seconds() / 60.0
         print(
-            f"{'Transport loop':<25} | {'Stress period:':<15} {stress_period:<5} | {'Time step:':<15} {time_step:<10} | {'Completed in :':<10}  {td//60:.0f} min {td%60:.4f} sec"
+            f"{'Transport':<15} | {'Stress period:':<15} {stress_period:<5} | {'Time step:':<15} {time_step:<10} | {'Completed in :':<10}  {td//60:.0f} min {td%60:10.2e} sec"
         )
 
     def _check_num_fails(self):

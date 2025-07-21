@@ -12,7 +12,8 @@ import shutil
 import pytest
 
 import flopy
-from mf6rtm import utils, mf6rtm, mup3d
+import mf6rtm
+from mf6rtm import utils, solver, mup3d
 from autotest.conftest import make_dir_writable
 
 cwd = os.path.abspath(os.path.dirname(__file__))
@@ -657,7 +658,7 @@ def test02(prefix = 'test02'):
 
     for key, value in equilibrium_phases.items():
         for k, v in value.items():
-            v[-1] = mf6rtm.concentration_volbulk_to_volwater( v[-1], prsity)
+            v[-1] = utils.concentration_volbulk_to_volwater( v[-1], prsity)
     #assign solutions to grid
     sol_ic = np.ones((nlay, nrow, ncol), dtype=float)
 
@@ -766,7 +767,7 @@ def test03(prefix = 'test03'):
     # equlibrium phases is a dictionary with keys as the phase number, values is another dictionary with phase name and an array of saturation indices as element 0 and concentrations as element 1. multiply the concentrations by 2
     for key, value in equilibrium_phases.items():
         for k, v in value.items():
-            v[-1] = mf6rtm.concentration_volbulk_to_volwater( v[-1], prsity)
+            v[-1] = utils.concentration_volbulk_to_volwater( v[-1], prsity)
     #assign solutions to grid
     sol_ic = np.ones((nlay, nrow, ncol), dtype=int)
 
