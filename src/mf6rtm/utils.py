@@ -1,7 +1,7 @@
 import platform
 import os
 import shutil
-import pandas
+import pandas as pd
 
 # global variables
 endmainblock = """\nPRINT
@@ -113,12 +113,12 @@ def kinetics_df_to_dict(data, header=True):
     # data.set_index(data.columns[0], inplace=True)
     par_cols = [col for col in data.columns if col.startswith("par")]
     for key in data.index:
-        parms = [item for item in data.loc[key, par_cols] if not pandas.isna(item)]
+        parms = [item for item in data.loc[key, par_cols] if not pd.isna(item)]
         # print(parms)
         dic[key] = [
             item
             for item in data.loc[key]
-            if item not in parms and not pandas.isna(item)
+            if item not in parms and not pd.isna(item)
         ]
         dic[key].append(parms)
     return dic
@@ -208,6 +208,113 @@ def surfaces_csv_to_dict(csv_file, header=True):
                 data[int(row[-1])][row[0]] = [i for i in row[1:-1]]
     return data
 
+def parse_equilibriums_dataframe(df, columns=None):
+    """
+    Convert a DataFrame of equilibrium phases into a nested dictionary.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame.
+    columns : list of str, optional
+        List of column names in the following order:
+        [phase, sat_index, conc_mol_lb, num].
+        Default: ['phase', 'sat_index', 'conc_mol_lb', 'num']
+        num corresponds to the block number
+
+    Returns
+    -------
+    dict
+        Dictionary structured as {zone: {phase: {'si': val, 'moles': val}}}
+    """
+    if columns is None:
+        columns = ['phase', 'sat_index', 'conc_mol_lb', 'num']
+
+    phase_col, si_col, moles_col, zone_col = columns
+
+    equ_phases = {}
+    for _, row in df.iterrows():
+        zone = row[zone_col]
+        if zone not in equ_phases:
+            equ_phases[zone] = {}
+        equ_phases[zone][row[phase_col]] = {
+            "si": row[si_col],
+            "moles": row[moles_col],
+        }
+
+    return equ_phases
+
+def parse_kinetics_dataframe(df, optional_fields=["formula", "steps"]):
+    """
+    Convert a DataFrame of kinetic phase data into a nested dictionary to import into mup3d.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Must include 'm0', 'parm1'-'parm4', 'num', and either 'phase' or 'name'.
+    optional_fields : list of str, optional
+        List of optional columns to include if present and non-NaN.
+
+    Returns
+    -------
+    dict
+        Nested dictionary like:
+        {
+            1: {
+                "Calcite": {
+                    "m0": 4.0,
+                    "parms": [100.0, 0.6],
+                    "formula": "Calcite -1.0 Ca 1.0 C -1.0",
+                    ...
+                },
+                ...
+            }
+        }
+    """
+    df.columns = df.columns.str.strip()
+
+    if optional_fields is None:
+        optional_fields = ["formula", "steps", "tol", "phase_type"]
+
+    # Find name column
+    name_col = next((col for col in ["phase", "name"] if col in df.columns), None)
+    if name_col is None:
+        raise ValueError("Expected a 'phase' or 'name' column in the DataFrame.")
+
+    phases = {}
+
+    for _, row in df.iterrows():
+        zone = int(row["num"])
+        species_name = row[name_col]
+
+        if zone not in phases:
+            phases[zone] = {}
+
+        # Parse m0
+        m0 = float(row["m0"])
+
+        # Parse parms (skip NaN)
+        parms = [
+            float(row[col]) for col in ["parm1", "parm2", "parm3", "parm4"]
+            if col in df.columns and not pd.isna(row[col])
+        ]
+
+        # Build entry
+        entry = {
+            "m0": m0,
+            "parms": parms
+        }
+
+        # Add optional fields
+        for field in optional_fields:
+            if field in df.columns:
+                val = row[field]
+                if not pd.isna(val):
+                    entry[field] = val if not isinstance(val, float) else float(val)
+
+        phases[zone][species_name] = entry
+
+    return phases
 
 def kinetics_phases_csv_to_dict(csv_file, header=True):
     """Read an equilibrium phases CSV file and convert it to a dictionary
@@ -229,7 +336,6 @@ def kinetics_phases_csv_to_dict(csv_file, header=True):
         # skip header assuming first line is header
         if header:
             cols = next(reader)
-            # print(cols)
         data = {}
         for row in reader:
             if row[0].startswith("#"):
@@ -324,7 +430,30 @@ def get_compound_names(database_file, block="SOLUTION_MASTER_SPECIES"):
     return species_names
 
 
-def generate_exchange_block(exchange_dict, i, equilibrate_solutions=[]):
+# def generate_exchange_block(exchange_dict, i, equilibrate_solutions=[]):
+#     """Generate an EXCHANGE block for PHREEQC input script
+#     Parameters
+#     ----------
+#     exchange_dict : dict
+#         A dictionary with species names as keys and exchange concentrations as values.
+#     i : int
+#         The block number.
+#     Returns
+#     -------
+#     script : str
+#         The EXCHANGE block as a string.
+#     """
+#     script = f"EXCHANGE {i+1}\n"
+#     for species, conc in exchange_dict.items():
+#         script += f"    {species} {conc:.5e}\n"
+#     if len(equilibrate_solutions) > 0:
+#         script += f"    -equilibrate {equilibrate_solutions[i]}"
+#     else:
+#         script += f"    -equilibrate {1}"
+#     script += "\nEND\n"
+#     return script
+
+def generate_exchange_block(phases_dict, i, equilibrate_solutions=1):
     """Generate an EXCHANGE block for PHREEQC input script
     Parameters
     ----------
@@ -337,16 +466,14 @@ def generate_exchange_block(exchange_dict, i, equilibrate_solutions=[]):
     script : str
         The EXCHANGE block as a string.
     """
-    script = f"EXCHANGE {i+1}\n"
-    for species, conc in exchange_dict.items():
-        script += f"    {species} {conc:.5e}\n"
-    if len(equilibrate_solutions) > 0:
-        script += f"    -equilibrate {equilibrate_solutions[i]}"
-    else:
-        script += f"    -equilibrate {1}"
-    script += "\nEND\n"
+    script = ""
+    script += f"EXCHANGE {i+1}\n"
+    for name, values in phases_dict.items():
+        moles = values['moles']
+        script += f"    {name} {moles:.5e}\n"
+    script += f"    -equilibrate {equilibrate_solutions}\n"
+    script += "END\n"
     return script
-
 
 def generate_surface_block(surface_dict, i, options=[]):
     """Generate a SURFACE block for PHREEQC input script
@@ -375,39 +502,97 @@ def generate_surface_block(surface_dict, i, options=[]):
     return script
 
 
+# def generate_kinetics_block(kinetics_dict, i):
+#     """Generate a KINETICS block for PHREEQC input script
+#     Parameters
+#     ----------
+#     kinetics_dict : dict
+#         A dictionary with species names as keys and lists of rate constants and exponents as values.
+#     i : int
+#         The block number.
+#     Returns
+#     -------
+#     script : str
+#         The KINETICS block as a string.
+#     """
+#     script = f"KINETICS {i+1}\n"
+#     options = ["m0", "parms", "formula", "steps"]
+#     for species, values in kinetics_dict.items():
+#         script += f"    {species}\n"
+#         for k in range(len(values)):
+#             if isinstance(values[k], list):
+#                 script += (
+#                     f"        -{options[k]} "
+#                     + " ".join(f"{parm:.5e}" for parm in values[k])
+#                     + "\n"
+#                 )
+#             elif isinstance(values[k], str):
+#                 script += f"        -{options[k]} {values[k]}\n"
+#             else:
+#                 script += f"        -{options[k]} {values[k]:.5e}\n"
+#     script += "\nEND\n"
+#     return script
+
 def generate_kinetics_block(kinetics_dict, i):
-    """Generate a KINETICS block for PHREEQC input script
+    """
+    Generate a KINETICS block for PHREEQC input script.
+
     Parameters
     ----------
     kinetics_dict : dict
-        A dictionary with species names as keys and lists of rate constants and exponents as values.
+        Dictionary structured like:
+        {
+            "Pyrite": {
+                "m0": [0.04],
+                "parms": [3.42, 0.0, 0.5, 0.0],
+                "formula": "Pyrite -1.0 Fe 1.0 S -1.0"
+            },
+            ...
+        }
+
     i : int
         The block number.
+
     Returns
     -------
     script : str
         The KINETICS block as a string.
     """
     script = f"KINETICS {i+1}\n"
-    options = ["m0", "parms", "formula", "steps"]
-    for species, values in kinetics_dict.items():
+    for species, fields in kinetics_dict.items():
         script += f"    {species}\n"
-        for k in range(len(values)):
-            if isinstance(values[k], list):
-                script += (
-                    f"        -{options[k]} "
-                    + " ".join(f"{parm:.5e}" for parm in values[k])
-                    + "\n"
-                )
-            elif isinstance(values[k], str):
-                script += f"        -{options[k]} {values[k]}\n"
-            else:
-                script += f"        -{options[k]} {values[k]:.5e}\n"
-    script += "\nEND\n"
+        for key, val in fields.items():
+            if isinstance(val, list):
+                script += f"        -{key} " + " ".join(f"{v:.5e}" for v in val) + "\n"
+            elif isinstance(val, (int, float)):
+                script += f"        -{key} {val:.5e}\n"
+            else:  # assume string
+                script += f"        -{key} {val}\n"
+    script += "END\n"
     return script
 
+# def generate_phases_block(phases_dict, i):
+#     """Generate an EQUILIBRIUM_PHASES block for PHREEQC input script
+#     Parameters
+#     ----------
+#     phases_dict : dict
+#         A dictionary with phase names as keys and lists of saturation indices and amounts as values.
+#     i : int
+#         The block number.
+#     Returns
+#     -------
+#     script : str
+#         The EQUILIBRIUM_PHASES block as a string.
+#     """
+#     script = ""
+#     script += f"EQUILIBRIUM_PHASES {i+1}\n"
+#     for name, values in phases_dict.items():
+#         saturation_index, amount = values
+#         script += f"    {name} {saturation_index:.5e} {amount:.5e}\n"
+#     script += "\nEND\n"
+#     return script
 
-def generate_phases_block(phases_dict, i):
+def generate_equ_phases_block(phases_dict, i):
     """Generate an EQUILIBRIUM_PHASES block for PHREEQC input script
     Parameters
     ----------
@@ -423,11 +608,11 @@ def generate_phases_block(phases_dict, i):
     script = ""
     script += f"EQUILIBRIUM_PHASES {i+1}\n"
     for name, values in phases_dict.items():
-        saturation_index, amount = values
-        script += f"    {name} {saturation_index:.5e} {amount:.5e}\n"
-    script += "\nEND\n"
+        saturation_index = values['si']
+        moles = values['moles']
+        script += f"    {name} {saturation_index:.5e} {moles:.5e}\n"
+    script += "END\n"
     return script
-
 
 def generate_solution_block(species_dict, i, temp=25.0, water=1.0):
     """Generate a SOLUTION block for PHREEQC input script

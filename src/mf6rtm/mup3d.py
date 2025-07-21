@@ -50,10 +50,14 @@ class Block:
             Initial condition concentrations. Default is None.
         """
         self.data = data
-        self.names = [key for key in data.keys()]
+        self.names = None
         self.ic = ic  #: None means no initial condition (-1)
         self.eq_solutions = []
         self.options = []
+
+    def get_names(self):
+        self.data 
+        ...
 
     def set_ic(self, ic: Union[int, float, np.ndarray]):
         '''Set the initial condition for the block.
@@ -451,21 +455,19 @@ class Mup3d(object):
                 assert all([key in names for key in phases.keys()]), 'Following phases are not in database: '+', '.join(f'{key}' for key in phases.keys() if key not in names)
 
                 # Handle the  EQUILIBRIUM_PHASES blocks
-                script += utils.handle_block(phases, utils.generate_phases_block, i)
+                script += utils.handle_block(phases, utils.generate_equ_phases_block, i)
 
         # check if self.exchange_phases is not None
         if self.exchange_phases is not None:
-            # Get the current   phases
-            phases = self.exchange_phases.data
-            # check if all exchange phases are in the database
-            names = utils.get_compound_names(self.database, 'EXCHANGE')
-            assert all([key in names for key in phases.keys()]), 'Following are not in database: '+', '.join(f'{key}' for key in phases.keys() if key not in names)
+            for i in self.exchange_phases.data.keys():
+                # Get the current   phases
+                phases = self.exchange_phases.data[i]
+                # check if all equilibrium phases are in the database
+                names = utils.get_compound_names(self.database, 'EXCHANGE')
+                assert all([key in names for key in phases.keys()]), 'Following phases are not in database: '+', '.join(f'{key}' for key in phases.keys() if key not in names)
 
-            num_exch = len(next(iter(self.exchange_phases.data.values())))
-            for i in range(num_exch):
-                # Get the current concentrations and phases
-                concentrations = {species: values[i] for species, values in self.exchange_phases.data.items()}
-                script += utils.handle_block(concentrations, utils.generate_exchange_block, i, equilibrate_solutions=self.exchange_phases.eq_solutions)
+                # Handle the  EQUILIBRIUM_PHASES blocks
+                script += utils.handle_block(phases, utils.generate_exchange_block, i, equilibrate_solutions=self.exchange_phases.eq_solutions[i])
 
         # check if self.kinetic_phases is not None
         if self.kinetic_phases is not None:
