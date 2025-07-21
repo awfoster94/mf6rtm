@@ -182,6 +182,9 @@ class Mf6RTM(object):
         self.reactive = self.config.reactive
 
     def print_warning_user_active(self):
+        """
+        Prints a warning if reaction timing is set to 'user'.
+        """
         if self.config.reaction_timing == 'user':
             print(f"WARNING: Running reaction only in the following periods and time steps:")
             for period, timestep in self.config.tsteps:

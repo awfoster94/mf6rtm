@@ -641,6 +641,7 @@ class Mup3d(object):
         return config_path
 
     def write_simulation(self):
+        """write phreqcrm simulation and configuration files"""
         self._write_phreeqc_init_file()
         self.save_config()
         print(f"Simulation saved in {self.wd}")
