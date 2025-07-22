@@ -57,7 +57,7 @@ class Block:
 
     def get_names(self):
         '''Get the block names or phases.
-        '''        
+        '''
         if isinstance(self, Solutions):
             self.names = sorted(list(self.data.keys()))
         else:

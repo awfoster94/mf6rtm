@@ -2,6 +2,7 @@ import platform
 import os
 import shutil
 import pandas as pd
+import numpy as np
 
 # global variables
 endmainblock = """\nPRINT
@@ -109,18 +110,19 @@ def kinetics_df_to_dict(data, header=True):
     data : dict
         A dictionary with the first column as keys and the remaining columns as values.
     """
-    dic = {}
-    # data.set_index(data.columns[0], inplace=True)
-    par_cols = [col for col in data.columns if col.startswith("par")]
-    for key in data.index:
-        parms = [item for item in data.loc[key, par_cols] if not pd.isna(item)]
-        # print(parms)
-        dic[key] = [
-            item
-            for item in data.loc[key]
-            if item not in parms and not pd.isna(item)
-        ]
-        dic[key].append(parms)
+    dic=parse_kinetics_dataframe(data)
+    # dic = {}
+    # # data.set_index(data.columns[0], inplace=True)
+    # par_cols = [col for col in data.columns if col.startswith("par")]
+    # for key in data.index:
+    #     parms = [item for item in data.loc[key, par_cols] if not pd.isna(item)]
+    #     # print(parms)
+    #     dic[key] = [
+    #         item
+    #         for item in data.loc[key]
+    #         if item not in parms and not pd.isna(item)
+    #     ]
+    #     dic[key].append(parms)
     return dic
 
 
@@ -156,23 +158,25 @@ def equilibrium_phases_csv_to_dict(csv_file, header=True):
     data : dict
         A dictionary with phase names as keys and lists of saturation indices and amounts as values.
     """
-    import csv
+    df=pd.read_csv(csv_file)
+    data=parse_equilibriums_dataframe(df)
+    # import csv
 
-    with open(csv_file, mode="r") as infile:
-        reader = csv.reader(infile)
-        # skip header assuming first line is header
-        if header:
-            next(reader)
-        data = {}
-        for row in reader:
-            if row[0].startswith("#"):
-                continue
-            if int(row[-1]) not in data:
-                # data[row[0]] = [[float(row[1]), float(row[2])]]
-                data[int(row[-1])] = {row[0]: [float(row[1]), float(row[2])]}
-            else:
-                # data[int(row[-1])] # append {row[0]: [float(row[1]), float(row[2])]} to the existing nested dictionary
-                data[int(row[-1])][row[0]] = [float(row[1]), float(row[2])]
+    # with open(csv_file, mode="r") as infile:
+    #     reader = csv.reader(infile)
+    #     # skip header assuming first line is header
+    #     if header:
+    #         next(reader)
+    #     data = {}
+    #     for row in reader:
+    #         if row[0].startswith("#"):
+    #             continue
+    #         if int(row[-1]) not in data:
+    #             # data[row[0]] = [[float(row[1]), float(row[2])]]
+    #             data[int(row[-1])] = {row[0]: [float(row[1]), float(row[2])]}
+    #         else:
+    #             # data[int(row[-1])] # append {row[0]: [float(row[1]), float(row[2])]} to the existing nested dictionary
+    #             data[int(row[-1])][row[0]] = [float(row[1]), float(row[2])]
     return data
 
 
@@ -225,7 +229,7 @@ def parse_equilibriums_dataframe(df, columns=None):
     Returns
     -------
     dict
-        Dictionary structured as {zone: {phase: {'si': val, 'moles': val}}}
+        Dictionary structured as {zone: {phase: {'si': val, 'm0': val}}}
     """
     if columns is None:
         columns = ['phase', 'sat_index', 'conc_mol_lb', 'num']
@@ -239,7 +243,7 @@ def parse_equilibriums_dataframe(df, columns=None):
             equ_phases[zone] = {}
         equ_phases[zone][row[phase_col]] = {
             "si": row[si_col],
-            "moles": row[moles_col],
+            "m0": row[moles_col],
         }
 
     return equ_phases
@@ -317,7 +321,7 @@ def parse_kinetics_dataframe(df, optional_fields=["formula", "steps"]):
     return phases
 
 def kinetics_phases_csv_to_dict(csv_file, header=True):
-    """Read an equilibrium phases CSV file and convert it to a dictionary
+    """Read an kinetic phases CSV file and convert it to a dictionary
     Parameters
     ----------
     csv_file : str
@@ -329,30 +333,32 @@ def kinetics_phases_csv_to_dict(csv_file, header=True):
     data : dict
         A dictionary with phase names as keys and lists of saturation indices and amounts as values.
     """
-    import csv
+    df = pd.read(csv_file)
+    data=parse_kinetics_dataframe(df)
+    # import csv
 
-    with open(csv_file, mode="r") as infile:
-        reader = csv.reader(infile)
-        # skip header assuming first line is header
-        if header:
-            cols = next(reader)
-        data = {}
-        for row in reader:
-            if row[0].startswith("#"):
-                continue
-            rowcleaned = [i for i in row if i != ""]
-            if int(rowcleaned[-1]) not in data:
-                # data[row[0]] = [[float(row[1]), float(row[2])]]
-                data[int(rowcleaned[-1])] = {rowcleaned[0]: [float(rowcleaned[1])]}
-                data[int(rowcleaned[-1])][rowcleaned[0]].append(
-                    [float(i) for i in rowcleaned[2:-1]]
-                )
-            else:
-                data[int(rowcleaned[-1])][rowcleaned[0]] = [float(rowcleaned[1])]
-                data[int(rowcleaned[-1])][rowcleaned[0]].append(
-                    [float(i) for i in rowcleaned[2:-1]]
-                )
-                # [float(i) for i in rowcleaned[1:-1]]
+    # with open(csv_file, mode="r") as infile:
+    #     reader = csv.reader(infile)
+    #     # skip header assuming first line is header
+    #     if header:
+    #         cols = next(reader)
+    #     data = {}
+    #     for row in reader:
+    #         if row[0].startswith("#"):
+    #             continue
+    #         rowcleaned = [i for i in row if i != ""]
+    #         if int(rowcleaned[-1]) not in data:
+    #             # data[row[0]] = [[float(row[1]), float(row[2])]]
+    #             data[int(rowcleaned[-1])] = {rowcleaned[0]: [float(rowcleaned[1])]}
+    #             data[int(rowcleaned[-1])][rowcleaned[0]].append(
+    #                 [float(i) for i in rowcleaned[2:-1]]
+    #             )
+    #         else:
+    #             data[int(rowcleaned[-1])][rowcleaned[0]] = [float(rowcleaned[1])]
+    #             data[int(rowcleaned[-1])][rowcleaned[0]].append(
+    #                 [float(i) for i in rowcleaned[2:-1]]
+    #             )
+    #             # [float(i) for i in rowcleaned[1:-1]]
     return data
 
 
@@ -429,6 +435,44 @@ def get_compound_names(database_file, block="SOLUTION_MASTER_SPECIES"):
                     species_names.append(species)
     return species_names
 
+def map_species_property_to_grid(data_dict, ic_array, species, property_key):
+    """
+    Create an array matching ic_array shape with a selected property
+    (e.g., 'moles', 'si') of a given species from a zone-indexed dictionary.
+
+    Parameters
+    ----------
+    data_dict : dict
+        Format: {zone_idx (int): {species_name (str): {key: value, ...}}}
+    ic_array : np.ndarray
+        1-indexed zone allocation array of shape (nlay, nrow, ncol).
+    species : str
+        Species name to extract (e.g., 'Goethite').
+    property_key : str
+        Property to extract for the species (e.g., 'moles', 'si').
+
+    Returns
+    -------
+    np.ndarray
+        Array of same shape as ic_array filled with the extracted property values.
+
+    Raises
+    ------
+    KeyError
+        If the species or property_key is missing in any zone where it's expected.
+    """
+    output = np.zeros_like(ic_array, dtype=float)
+
+    for zone_idx, species_dict in data_dict.items():
+        if species not in species_dict:
+            raise KeyError(f"Species '{species}' not found in block id {zone_idx}")
+        if property_key not in species_dict[species]:
+            raise KeyError(f"Property '{property_key}' not found for species '{species}' in block id {zone_idx}")
+
+        value = species_dict[species][property_key]
+        output[ic_array == (zone_idx + 1)] = value
+
+    return output
 
 # def generate_exchange_block(exchange_dict, i, equilibrate_solutions=[]):
 #     """Generate an EXCHANGE block for PHREEQC input script
@@ -469,7 +513,7 @@ def generate_exchange_block(phases_dict, i, equilibrate_solutions=1):
     script = ""
     script += f"EXCHANGE {i+1}\n"
     for name, values in phases_dict.items():
-        moles = values['moles']
+        moles = values['m0']
         script += f"    {name} {moles:.5e}\n"
     script += f"    -equilibrate {equilibrate_solutions}\n"
     script += "END\n"
@@ -609,7 +653,7 @@ def generate_equ_phases_block(phases_dict, i):
     script += f"EQUILIBRIUM_PHASES {i+1}\n"
     for name, values in phases_dict.items():
         saturation_index = values['si']
-        moles = values['moles']
+        moles = values['m0']
         script += f"    {name} {saturation_index:.5e} {moles:.5e}\n"
     script += "END\n"
     return script
