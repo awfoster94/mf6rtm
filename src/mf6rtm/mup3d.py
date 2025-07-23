@@ -195,6 +195,7 @@ class Mup3d(object):
         ncol: Union[int, None] = None,
         ncpl: Union[int, None] = None,
         nxyz: Union[int, None] = None,
+        componenth2o: Union[bool, None] = None
     ):
         """Initializes a Mup3d instance with the given parameters.
 
@@ -259,6 +260,7 @@ class Mup3d(object):
         self.phinp = None
         self.components = None
         self.fixed_components = None
+        self.componenth2o = False
         self.config = MF6RTMConfig() #default config
 
         # Set grid parameters for DIS
@@ -287,6 +289,17 @@ class Mup3d(object):
         assert (self.solutions.ic.shape == self.grid_shape,
             f'Initial conditions array must be an array of the shape ({self.grid_shape}) not {self.solutions.ic.shape}'
         )
+    def set_componenth2o(self, flag):
+        '''Set the component H2O to be True or False.
+        if False Total H and Total O are transported
+        if True H2O, Excess H and Excess O are transported'''
+        assert(flag, (bool))
+        self.componenth2o = flag
+        return self.componenth2o
+
+    def get_componenth2o(self):
+        '''Get componenth2o flag'''
+        return getattr(self, 'componenth2o')
 
     def set_fixed_components(self, fixed_components):
         '''Set the fixed components for the MF6RTM model. These are the components that are not transported during the simulation.
@@ -530,7 +543,7 @@ class Mup3d(object):
 
         # initialize phreeqccrm object
         self.phreeqc_rm = phreeqcrm.PhreeqcRM(self.nxyz, nthreads)
-        status = self.phreeqc_rm.SetComponentH2O(False)
+        status = self.phreeqc_rm.SetComponentH2O(self.componenth2o)
         self.phreeqc_rm.UseSolutionDensityVolume(False)
 
         # Open files for phreeqcrm logging
@@ -687,7 +700,7 @@ class Mup3d(object):
         nxyz_spd = len(getattr(self, attr).sol_spd)
 
         phreeqc_rm = phreeqcrm.PhreeqcRM(nxyz_spd, nthreads)
-        status = phreeqc_rm.SetComponentH2O(False)
+        status = phreeqc_rm.SetComponentH2O(self.componenth2o)
         phreeqc_rm.UseSolutionDensityVolume(False)
 
         # Set concentration units
@@ -774,7 +787,7 @@ class Mup3d(object):
         phreeqcrm_yaml = yamlphreeqcrm.YAMLPhreeqcRM()
         phreeqcrm_yaml.YAMLSetGridCellCount(self.nxyz)
         phreeqcrm_yaml.YAMLThreadCount(1)
-        status = phreeqcrm_yaml.YAMLSetComponentH2O(False)
+        status = phreeqcrm_yaml.YAMLSetComponentH2O(self.componenth2o)
         status = phreeqcrm_yaml.YAMLUseSolutionDensityVolume(False)
 
         # Open files for phreeqcrm logging
