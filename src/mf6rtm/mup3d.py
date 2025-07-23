@@ -296,7 +296,7 @@ class Mup3d(object):
         assert(flag, (bool))
         self.componenth2o = flag
         return self.componenth2o
-    
+
     def get_componenth2o(self):
         '''Get componenth2o flag'''
         return getattr(self, 'componenth2o')
