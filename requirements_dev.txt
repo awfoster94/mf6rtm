@@ -7,3 +7,4 @@ flaky == 3.8.1
 jupytext == 1.16.4
 nbconvert == 7.16.4
 ipykernel == 6.29.4
+toml
