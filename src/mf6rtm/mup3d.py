@@ -51,7 +51,7 @@ class Block:
         """
         self.data = data
         self.ic = ic  #: None means no initial condition (-1)
-        self.eq_solutions = []
+        self.eq_solutions = None
         self.options = []
         self.get_names()
 
@@ -207,7 +207,6 @@ class Mup3d(object):
         ncol: Union[int, None] = None,
         ncpl: Union[int, None] = None,
         nxyz: Union[int, None] = None,
-        componenth2o: Union[bool, None] = None
     ):
         """Initializes a Mup3d instance with the given parameters.
 
@@ -486,7 +485,9 @@ class Mup3d(object):
                 # check if all equilibrium phases are in the database
                 names = utils.get_compound_names(self.database, 'EXCHANGE')
                 assert all([key in names for key in phases.keys()]), 'Following phases are not in database: '+', '.join(f'{key}' for key in phases.keys() if key not in names)
-
+                assert self.exchange_phases.eq_solutions is not None, 'No equilibrate solutions defined'
+                assert isinstance(self.exchange_phases.eq_solutions, (list, np.ndarray)), "exchange_phases.eq_solutions must be a list or numpy array"
+                assert len(self.exchange_phases.data.keys()) == len(self.exchange_phases.eq_solutions), "Mismatch between number of exchangers and eq_solutions"
                 # Handle the  EQUILIBRIUM_PHASES blocks
                 script += utils.handle_block(phases, utils.generate_exchange_block, i, equilibrate_solutions=self.exchange_phases.eq_solutions[i])
 
@@ -667,6 +668,7 @@ class Mup3d(object):
         """write phreqcrm simulation and configuration files"""
         self._write_phreeqc_init_file()
         self.save_config()
+        self.write_external_files_layered()
         print(f"Simulation saved in {self.wd}")
         return
 
@@ -790,6 +792,51 @@ class Mup3d(object):
         if self.phreeqc_rm is None:
             self.phreeqc_rm = phreeqcrm_from_yaml
         return
+
+    def write_external_files_layered(self,
+                                     phase_attrs = [
+                                                    "exchange_phases",
+                                                    "equilibrium_phases",
+                                                    "kinetic_phases"
+                                                    ],
+                                     property_to_write = ['m0']):
+        """
+        Write layered external text files for selected geochemical phases and properties.
+
+        For each specified geochemical phase (e.g., exchange, equilibrium, kinetic), this method extracts
+        the given properties (e.g., 'm0') for all defined species and writes a separate file per layer
+        in the simulation domain. The files are saved in the model's working directory and follow the
+        naming convention:
+
+            {phase}.{species}.{property}.layer{n}.txt
+
+        Parameters
+        ----------
+        phase_attrs : list of str, optional
+            List of model attributes containing geochemical phase data.
+            Default is ["exchange_phases", "equilibrium_phases", "kinetic_phases"].
+
+        property_to_write : list of str, optional
+            List of property names to extract and write per species and layer.
+            Default is ['m0'].
+        """
+        for attr in phase_attrs:
+            phase_obj = getattr(self, attr)
+            if phase_obj is None:
+                print(f"Warning: model has no attribute '{attr}'. Skipping.")
+                continue
+            data = phase_obj.data
+            ic = phase_obj.ic
+            for name in phase_obj.names:
+                print(f"Writing external files for {attr:<20}: {name}")
+                for prop in property_to_write:
+                    arr = utils.map_species_property_to_grid(
+                        data, ic, name, prop
+                    )
+                    for ly in range(arr.shape[0]):
+                        filepath = os.path.join(self.wd, f"{attr}.{name}.{prop}.layer{ly+1}.txt")
+                        with open(filepath, "w") as fh:
+                            fh.write("\n".join(str(val) for val in arr[ly].flatten()))
 
     def _write_phreeqc_init_file(self, filename='mf6rtm.yaml'):
         '''Write the phreeqc init yaml file'''
