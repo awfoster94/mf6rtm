@@ -667,8 +667,9 @@ class Mup3d(object):
     def write_simulation(self):
         """write phreqcrm simulation and configuration files"""
         self._write_phreeqc_init_file()
-        self.save_config()
+        self.write_internal_parameters()
         self.write_external_files_layered()
+        self.save_config()
         print(f"Simulation saved in {self.wd}")
         return
 
@@ -792,6 +793,185 @@ class Mup3d(object):
         if self.phreeqc_rm is None:
             self.phreeqc_rm = phreeqcrm_from_yaml
         return
+
+    def write_internal_parameters(self, internals = {
+                                                    "equilibrium_phases": ["si"],
+                                                    "kinetic_phases": ["parms", "formula"],
+                                                    }
+                                    ):
+        """Add non-external attributes to the config object."""
+        for key in internals.keys():
+            attr_list = internals[key]
+            phase_obj = getattr(self, key)
+            data = phase_obj.data[0]
+            
+            for item in attr_list:
+                attr_name = f"{key}_names"
+                if attr_name not in self.config.__dict__:
+                    # Add the names of the phases to the config object
+                    self.config.add_new_configuration(**{attr_name: list(phase_obj.names)})
+                for name in phase_obj.names:
+                    # print(f"Adding internal parameters for {key:<20}: {item} in {name}")
+                    if item in data[name]:
+                        # Create nested attribute name: equilibrium_phases_si_Goethite
+                        attr_name = f"{key}_{item}_{name}"
+                        # print(f"Adding {attr_name} to config")
+                        
+                        if not hasattr(self.config, attr_name):
+                            self.config.add_new_configuration(**{attr_name: data[name][item]})
+
+
+    def save_mup3d(self, filename='mup3d.pkl'):
+        """
+        Save the Mup3d object to a pickle file.
+        
+        This method saves all non-private, non-callable attributes of the Mup3d object
+        to a pickle file for later restoration using load_mup3d().
+        
+        Parameters
+        ----------
+        filename : str, optional
+            Name of the pickle file. Default is 'mup3d.pkl'.
+        """
+        import pickle
+        fname = os.path.join(self.wd, filename)
+        
+        # Attributes that cannot be pickled (SWIG objects, etc.)
+        unpickleable_attrs = {
+            'phreeqc_rm',           # SWIG PhreeqcRM object
+            'phreeqcrm_yaml',       # SWIG YAMLPhreeqcRM object
+        }
+        
+        # Create a dictionary of the object's attributes
+        # Exclude private attributes, callable methods, and unpickleable objects
+        attributes = {}
+        skipped_attrs = []
+        
+        for attr in dir(self):
+            if attr.startswith('_') or callable(getattr(self, attr)):
+                continue
+                
+            if attr in unpickleable_attrs:
+                skipped_attrs.append(attr)
+                continue
+                
+            try:
+                value = getattr(self, attr)
+                # Test if the attribute can be pickled
+                pickle.dumps(value)
+                attributes[attr] = value
+            except (TypeError, AttributeError) as e:
+                # Skip attributes that can't be pickled
+                skipped_attrs.append(f"{attr} ({str(e)})")
+                continue
+
+        # Save the object to a file
+        with open(fname, "wb") as file:
+            pickle.dump(attributes, file)
+            
+        print(f"Saved Mup3d model to {fname}")
+        if skipped_attrs:
+            print(f"Skipped unpickleable attributes: {skipped_attrs}")
+
+    @classmethod
+    def load_mup3d(cls, filename='mup3d.pkl', wd='.'):
+        """
+        Load a Mup3d object from a pickle file (class method).
+        
+        This creates a new Mup3d instance from a saved pickle file.
+        
+        Parameters
+        ----------
+        filename : str, optional
+            Name of the pickle file. Default is 'mup3d.pkl'.
+        working_dir : str, optional
+            Directory containing the pickle file. Default is current directory.
+            
+        Returns
+        -------
+        Mup3d
+            A new Mup3d instance loaded from the pickle file.
+            
+        Examples
+        --------
+        >>> # Create a new model from pickle file
+        >>> model = Mup3d.load_mup3d('my_model.pkl', '/path/to/model/dir')
+        """
+        import pickle
+        fname = os.path.join(wd, filename)
+        
+        # Load the object from a file
+        with open(fname, "rb") as file:
+            attributes = pickle.load(file)
+
+        # Create a new Mup3d instance with core parameters
+        instance = cls(
+            name=attributes.get('name', None),
+            solutions=attributes.get('solutions', None),
+            nlay=attributes.get('nlay', None),
+            nrow=attributes.get('nrow', None),
+            ncol=attributes.get('ncol', None),
+            ncpl=attributes.get('ncpl', None),
+            nxyz=attributes.get('nxyz', None)
+        )
+        
+        # Set the working directory if it exists
+        if attributes.get('wd') is not None:
+            instance.set_wd(attributes.get('wd'))
+            
+        # Set the database if it exists
+        if attributes.get('database') is not None and os.path.exists(attributes.get('database')):
+            instance.set_database(attributes.get('database'))
+            
+        # Set the postfix if it exists
+        if attributes.get('postfix') is not None and os.path.exists(attributes.get('postfix')):
+            instance.set_postfix(attributes.get('postfix'))
+            
+        # Set the componenth2o flag
+        instance.set_componenth2o(attributes.get('componenth2o', False))
+        
+        # Set the initial temperature
+        instance.set_initial_temp(attributes.get('init_temp', 25.0))
+        
+        # Set the charge offset
+        instance.set_charge_offset(attributes.get('charge_offset', 0.0))
+        
+        # Set the config object if it exists
+        if 'config' in attributes and attributes['config'] is not None:
+            if hasattr(attributes['config'], 'to_dict'):
+                # If config is a MF6RTMConfig object
+                config_dict = attributes['config'].to_dict()
+                instance.set_config(**config_dict)
+            elif isinstance(attributes['config'], dict):
+                # If config is already a dictionary
+                instance.set_config(**attributes['config'])
+        
+        # Set the phases using the appropriate setter methods
+        phase_types = ['equilibrium_phases', 'kinetic_phases', 'exchange_phases', 'surfaces_phases']
+        for phase_type in phase_types:
+            if phase_type in attributes and attributes[phase_type] is not None:
+                if phase_type == 'exchange_phases':
+                    instance.set_exchange_phases(attributes[phase_type])
+                elif phase_type == 'equilibrium_phases':
+                    instance.set_equilibrium_phases(attributes[phase_type])
+                else:
+                    # For kinetic_phases and surfaces_phases, use set_phases
+                    instance.set_phases(attributes[phase_type])
+        
+        # Set remaining attributes that don't have specific setter methods
+        skip_attrs = {
+            'name', 'solutions', 'nlay', 'nrow', 'ncol', 'ncpl', 'nxyz', 
+            'wd', 'database', 'postfix', 'componenth2o', 'init_temp', 
+            'charge_offset', 'config', 'equilibrium_phases', 'kinetic_phases', 
+            'exchange_phases', 'surfaces_phases'
+        }
+        
+        for attr, value in attributes.items():
+            if attr not in skip_attrs and not callable(value):
+                setattr(instance, attr, value)
+
+        print(f"Loaded Mup3d model from {fname}")
+        return instance
 
     def write_external_files_layered(self,
                                      phase_attrs = [
