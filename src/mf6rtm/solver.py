@@ -179,15 +179,15 @@ class Mf6RTM(object):
         self.set_time_conversion()
 
         self.config = MF6RTMConfig.from_toml_file(self.wd/"mf6rtm.toml")
-        self.reactive = self.config.reactive
+        self.reactive = self.config.reactive_enabled
 
     def print_warning_user_active(self):
         """
         Prints a warning if reaction timing is set to 'user'.
         """
-        if self.config.reaction_timing == 'user':
+        if self.config.reactive_timing == 'user':
             print(f"WARNING: Running reaction only in the following periods and time steps:")
-            for period, timestep in self.config.tsteps:
+            for period, timestep in self.config.reactive_tsteps:
                 print(f"  Period {period}, Time step {timestep}")
         else:
             return
@@ -524,13 +524,13 @@ class Mf6RTM(object):
         current_tstep = [self.mf6api.kper, self.mf6api.kstp]
 
         # Check strategy
-        if self.config.reaction_timing == 'all':
+        if self.config.reactive_timing == 'all':
             return True
-        elif self.config.reaction_timing == 'user':
-            return current_tstep in self.config.tsteps
+        elif self.config.reactive_timing == 'user':
+            return current_tstep in self.config.reactive_tsteps
         else:
             # Handle unknown strategy
-            print(f"Warning: Unknown strategy '{self.config.reaction_timing}'. Defaulting to reactive.")
+            print(f"Warning: Unknown strategy '{self.config.reactive_timing}'. Defaulting to reactive.")
             return True
 
     def solve(self) -> bool:
