@@ -72,7 +72,7 @@ class Regenerator:
         self.solution_blocks = block
         return block
 
-    def update_yaml(self):
+    def update_yaml(self, filename='mf6rtm.yaml'):
 
         """Update the YAML file with the regenerated script and initial conditions.
         """
@@ -97,7 +97,7 @@ class Regenerator:
 
         status = yamlphreeqcrm.YAMLRunFile(True, True, True, self.regenerated_phinp)
         status = yamlphreeqcrm.YAMLInitialPhreeqc2Module(ic1_flatten)
-        fdir = os.path.join(self.wd, 'mf6rtm_reg.yaml')
+        fdir = os.path.join(self.wd, filename)
         status = yamlphreeqcrm.WriteYAMLDoc(fdir)
 
         return ic1_flatten
