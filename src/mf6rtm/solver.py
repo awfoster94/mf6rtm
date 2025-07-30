@@ -98,7 +98,7 @@ def initialize_interfaces(wd: PathLike, nthread: int = 1) -> Mf6API:
 
     # initialize the interfaces
     mf6api = Mf6API(wd, dll)
-    phreeqcrm = PhreeqcBMI(yamlfile)
+    phreeqcrm = PhreeqcBMI(yamlfile) #FIXME: Does not work with path like
     mf6rtm = Mf6RTM(wd, mf6api, phreeqcrm)
     return mf6rtm
 

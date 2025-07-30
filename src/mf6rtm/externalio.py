@@ -3,6 +3,16 @@ import numpy as np
 from mf6rtm.config import MF6RTMConfig
 from mf6rtm.mf6api import Mf6API
 from mf6rtm.discretization import grid_dimensions, total_cells_in_grid
+from mf6rtm.yaml_reader import load_yaml_to_phreeqcrm
+
+ic_position = {
+    'equilibrium_phases': 1, 
+    'exchange_phases': 2, 
+    'surface_phases': 3,
+    'gas_phases': 4,
+    'solid_solution_phases': 5,
+     'kinetic_phases':6,
+}
 
 class Regenerator:
     """
@@ -10,6 +20,7 @@ class Regenerator:
     """
     def __init__(self, wd='.', phinp='phinp.dat'):
         self.wd = os.path.join(wd)
+        self.yamlfile = os.path.join(self.wd, 'mf6rtm.yaml')
         self.phinp = phinp
         self.config = MF6RTMConfig.from_toml_file(os.path.join(self.wd, 'mf6rtm.toml')).to_dict()
         self.grid_shape = grid_dimensions(Mf6API(self.wd, os.path.join(self.wd, 'libmf6.dll')))
@@ -61,6 +72,36 @@ class Regenerator:
         self.solution_blocks = block
         return block
 
+    def update_yaml(self):
+
+        """Update the YAML file with the regenerated script and initial conditions.
+        """
+        yamlphreeqcrm, ic1 = load_yaml_to_phreeqcrm(self.yamlfile)
+        ic1 = ic1.reshape(7, 32).T
+        ic1_phases = np.reshape(np.arange(1, self.nxyz + 1), self.nxyz)
+
+        phases = [i for i in self.config.keys() if 'phases' in i]
+
+        for phase in phases:
+            i = ic_position[phase]
+            ic1[:, i] = ic1_phases
+
+        # ic1[:, 1] = np.reshape(self.equilibrium_phases.ic, self.nxyz)
+        # ic1[:, 2] = np.reshape(self.exchange_phases.ic, self.nxyz)  # Exchange
+        # ic1[:, 3] = np.reshape(self.surfaces_phases.ic, self.nxyz)  # Surface
+        # ic1[:, 4] = -1  # Gas phase
+        # ic1[:, 5] = -1  # Solid solutions
+        # ic1[:, 6] = np.reshape(self.kinetic_phases.ic, self.nxyz)  # Kinetics
+
+        ic1_flatten = ic1.flatten('F')
+
+        status = yamlphreeqcrm.YAMLRunFile(True, True, True, self.regenerated_phinp)
+        status = yamlphreeqcrm.YAMLInitialPhreeqc2Module(ic1_flatten)
+        fdir = os.path.join(self.wd, 'mf6rtm_reg.yaml')
+        status = yamlphreeqcrm.WriteYAMLDoc(fdir)
+
+        return ic1_flatten
+
     def get_postfix_block(self, script):
         """
         Extract the postfix block from the script.
@@ -108,7 +149,8 @@ class Regenerator:
         with open(os.path.join(self.wd, filename), 'w') as f:
             f.write(self.regenerated_script)
         print(f"New script written to {os.path.join(self.wd, filename)}")
-        return os.path.join(self.wd, filename)
+        self.regenerated_phinp = os.path.join(self.wd, filename)
+        return self.regenerated_phinp
     
 
 
