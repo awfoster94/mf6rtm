@@ -797,6 +797,7 @@ class Mup3d(object):
     def write_internal_parameters(self, internals = {
                                                     "equilibrium_phases": ["si"],
                                                     "kinetic_phases": ["parms", "formula"],
+                                                    "exchange_phases": ["dummy"]
                                                     }
                                     ):
         """Add non-external attributes to the config object."""
@@ -806,6 +807,11 @@ class Mup3d(object):
             data = phase_obj.data[0]
             
             for item in attr_list:
+                if item == "dummy":
+                    attr_name = f"{key}_names"
+                    self.config.add_new_configuration(**{attr_name: list(phase_obj.names)})
+                    # Skip dummy items, they are not real parameters
+                    continue
                 attr_name = f"{key}_names"
                 if attr_name not in self.config.__dict__:
                     # Add the names of the phases to the config object

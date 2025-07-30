@@ -236,10 +236,10 @@ class MF6RTMConfig:
                         result[main_group] = {}
                     if sub_group not in result[main_group]:
                         result[main_group][sub_group] = {}
-                    print(main_group, sub_group, key, value)
+                    # print(main_group, sub_group, key, value)
                     result[main_group][sub_group][key] = value
                 elif len(parts) >= 2 and parts[-1] in ['names']:
-                    print(f"Adding {attr_name} to config")
+                    # print(f"Adding {attr_name} to config")
                     # Handle attributes like "kinetic_phases_names" or "equilibrium_phases_names"
                     # Create a nested structure for TOML section [kinetic_phases.names]
                     main_group = '_'.join(parts[:-1])  # e.g., "kinetic_phases"
@@ -249,7 +249,7 @@ class MF6RTMConfig:
                     
                     # Create the nested structure that TOML will render as [kinetic_phases.names]
                     result[main_group]['names'] = value
-                    print(f"Adding names to {main_group}.names: {value}")
+                    # print(f"Adding names to {main_group}.names: {value}")
             else:
                 result[attr_name] = value
         
