@@ -101,7 +101,7 @@ def load_yaml_to_phreeqcrm(yaml_file_path):
         'RunCells': lambda item: yrm.YAMLRunCells(),
         'SetTime': lambda item: yrm.YAMLSetTime(item['time']),
     }
-    
+    not_to_read = ['RunFile', 'RunString', 'AddOutputVars', 'FindComponents', 'RunCells', 'SetTime']
     # Process each item in the YAML data
     for item in yaml_data:
         key = item.get('key')
@@ -110,7 +110,7 @@ def load_yaml_to_phreeqcrm(yaml_file_path):
                 # Handle the initial conditions separately
                 ic1 = np.array(item.get('ic', []))
                 continue
-            elif key in ['RunFile']:
+            elif key in not_to_read:
                 continue
             try:
                 method_mapping[key](item)
