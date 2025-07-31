@@ -36,6 +36,16 @@ def check_config_file(wd: PathLike) -> tuple[PathLike, PathLike]:
     assert os.path.exists(
         os.path.join(wd, "mf6rtm.toml")
         ), "mf6rtm.toml not found in model directory"
+    config_file= os.path.join(wd, "mf6rtm.toml")
+    config = MF6RTMConfig.from_toml_file(config_file)
+    return config
+
+def check_nam_files(wd: PathLike) -> tuple[PathLike, PathLike]:
+    """Check if the nam files are present in the model directory"""
+    nam = [f for f in os.listdir(wd) if f.endswith(".nam")]
+    assert "mfsim.nam" in nam, "mfsim.nam file not found in model directory"
+    assert "gwf.nam" in nam, "gwf.nam file not found in model directory"
+    return os.path.join(wd, "mfsim.nam"), os.path.join(wd, "gwf.nam")
 
 def prep_to_run(wd: PathLike) -> tuple[PathLike, PathLike]:
     """
@@ -56,19 +66,23 @@ def prep_to_run(wd: PathLike) -> tuple[PathLike, PathLike]:
     # check if file starting with libmf6 exists
     dll = [f for f in os.listdir(wd) if f.startswith("libmf6")]
     assert len(dll) == 1, "libmf6 dll not found in model directory"
-    assert os.path.exists(
-        os.path.join(wd, "mf6rtm.yaml")
-    ), "mf6rtm.yaml not found in model directory"
-
-    check_config_file(wd)
-    nam = [f for f in os.listdir(wd) if f.endswith(".nam")]
-    assert "mfsim.nam" in nam, "mfsim.nam file not found in model directory"
-    assert "gwf.nam" in nam, "gwf.nam file not found in model directory"
     dll = os.path.join(wd, "libmf6")
-    yamlfile = os.path.join(wd, "mf6rtm.yaml")
 
+    config = check_config_file(wd)
+    check_nam_files(wd)
+    if config.reactive['externalio']:
+        from mf6rtm.externalio import Regenerator
+        print("WARNING: Flag for external IO mode is active")
+        regcls = Regenerator.regenerate_from_external_files(wd=wd, 
+                                                phinpfile='phinp.dat',
+                                                yamlfile='mf6rtm.yaml')
+        yamlfile = regcls.yamlfile
+    else:
+        yamlfile = os.path.join(wd, "mf6rtm.yaml")
+    assert os.path.exists(
+        os.path.join(wd, yamlfile)
+    ), f"{yamlfile} not found in model directory {wd}"
     return yamlfile, dll
-
 
 def solve(wd: PathLike, reactive: Union[bool, None] = None, nthread: int = 1) -> bool:
     """Wrapper to prepare and call solve functions"""

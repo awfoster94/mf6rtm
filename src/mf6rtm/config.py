@@ -34,38 +34,6 @@ class MF6RTMConfig:
     tsteps : List[Tuple[int, int]]
         List of time steps for reaction calculations.
     """
-
-    # def __init__(self,
-    #              reactive: bool = True,
-    #              reaction_timing: str = 'all',
-    #              tsteps: List[Tuple[int, int]] = None):
-    #     """Initialize MF6RTM configuration.
-
-    #     Parameters
-    #     ----------
-    #     reaction_timing : str, optional
-    #         Reaction timing strategy ('all', 'user', 'adaptive').
-    #     tsteps : List[Tuple[int, int]], optional
-    #         List of (kper, kstp) tuples for user-defined timing.
-    #     """
-    #     self.reactive = reactive
-    #     self.reaction_timing = reaction_timing
-    #     self.tsteps = tsteps if tsteps is not None else []
-
-    #     # Validate inputs
- 
-    #     self._config_schema = {
-    #         'reactive': ConfigSchema('global'),
-    #         'reaction_timing': ConfigSchema('reaction_timing', 'strategy'),
-    #         'tsteps': ConfigSchema('reaction_timing'),
-    #         'equilibrium_phases': ConfigSchema('si', 'm0'),
-    #         # Future attributes
-    #         # 'max_iterations': ConfigSchema('solver'),
-    #         # 'convergence_tolerance': ConfigSchema('solver', 'tolerance'),
-    #         # 'output_frequency': ConfigSchema('output', 'frequency'),
-    #     }
-    #     self._validate_reaction_timing()
-    #     self._validate_tsteps()
     def __init__(self, **kwargs):
         """Basic initialization."""
         # Minimal initialization
@@ -74,17 +42,13 @@ class MF6RTMConfig:
         # Apply defaults for any missing attributes
         self._apply_defaults()
 
-    # def get_config_data(self):
-    #     """Get all dataclass fields for introspection."""
-    #     self.config_data = self.to_dict()
-    #     return self.config_data
-
     def _apply_defaults(self):
         """Apply default values for any missing attributes."""
         defaults = {
             'reactive_enabled': True,
             'reactive_timing': 'all',
             'reactive_tsteps': [],
+            'reactive_externalio': False,
         }
         
         # Apply defaults for any missing attributes
@@ -184,43 +148,18 @@ class MF6RTMConfig:
         else:
             return False
 
-    # def to_dict(self) -> Dict[str, Any]:
-    #     """Convert configuration to dictionary for TOML output.
-
-    #     Returns
-    #     -------
-    #     Dict[str, Any]
-    #         Dictionary representation suitable for TOML serialization.
-    #     """
-    #     dict = {
-    #         'global': {
-    #                     'reactive':self.reactive,
-    #         },
-    #         'reaction_timing': {
-    #             'strategy': self.reaction_timing,
-    #             'tsteps': self.tsteps
-    #         }
-    #     }
-    #     return dict
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary for TOML output with nested structure."""
         result = {}
-        
-        # Group reactive attributes
-        reactive_attrs = ['reactive_enabled', 'reactive_timing', 'reactive_tsteps']
         reactive_group = {}
-        
+        prefix = "reactive_"
+
         for attr_name, value in self.__dict__.items():
             if attr_name.startswith('_'):
                 continue
-            
-            if attr_name in reactive_attrs:
-                if attr_name == 'reactive_enabled':
-                    reactive_group['enabled'] = value
-                elif attr_name == 'reactive_timing':
-                    reactive_group['timing'] = value
-                else:
-                    reactive_group['tsteps'] = value
+            if attr_name.startswith(prefix):
+                key = attr_name[len(prefix):]  # strip the prefix
+                reactive_group[key] = value       
             
             # Handle nested phase attributes
             if '_' in attr_name:
@@ -236,27 +175,20 @@ class MF6RTMConfig:
                         result[main_group] = {}
                     if sub_group not in result[main_group]:
                         result[main_group][sub_group] = {}
-                    # print(main_group, sub_group, key, value)
                     result[main_group][sub_group][key] = value
                 elif len(parts) >= 2 and parts[-1] in ['names']:
-                    # print(f"Adding {attr_name} to config")
-                    # Handle attributes like "kinetic_phases_names" or "equilibrium_phases_names"
-                    # Create a nested structure for TOML section [kinetic_phases.names]
                     main_group = '_'.join(parts[:-1])  # e.g., "kinetic_phases"
                     
                     if main_group not in result:
                         result[main_group] = {}
-                    
                     # Create the nested structure that TOML will render as [kinetic_phases.names]
                     result[main_group]['names'] = value
-                    # print(f"Adding names to {main_group}.names: {value}")
             else:
                 result[attr_name] = value
         
         if reactive_group:
             result['reactive'] = reactive_group
         
-        # Sort the dictionary: 'reactive' first, then grouped by phase type
         sorted_result = {}
         
         # Add 'reactive' first if it exists
@@ -270,13 +202,11 @@ class MF6RTMConfig:
         for key in result.keys():
             if key == 'reactive':
                 continue
-            
             # Extract the main phase type (e.g., 'equilibrium_phases', 'kinetic_phases')
             if '.' in key:
                 main_phase = key.split('.')[0]
             else:
                 main_phase = key
-            
             # Group by main phase type
             if main_phase.endswith('_phases'):
                 if main_phase not in phase_groups:
@@ -284,7 +214,6 @@ class MF6RTMConfig:
                 phase_groups[main_phase].append(key)
             else:
                 other_keys.append(key)
-        
         # Add phase groups in alphabetical order of phase type
         for phase_type in sorted(phase_groups.keys()):
             # Sort keys within each phase group
@@ -304,7 +233,6 @@ class MF6RTMConfig:
         # Add any remaining keys alphabetically
         for key in sorted(other_keys):
             sorted_result[key] = result[key]
-        
         return sorted_result
 
     def _update_schema_for_new_attrs(self, attr_names):
@@ -335,38 +263,38 @@ class MF6RTMConfig:
                     }
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> 'MF6RTMConfig':
-        """Create configuration from dictionary with automatic flattening."""
         kwargs = {}
-        
+
         def flatten_dict(d: Dict[str, Any], parent_key: str = '', sep: str = '_') -> Dict[str, Any]:
-            """Recursively flatten nested dictionary."""
             items = []
             for k, v in d.items():
                 new_key = f"{parent_key}{sep}{k}" if parent_key else k
-                
                 if isinstance(v, dict):
                     items.extend(flatten_dict(v, new_key, sep=sep).items())
                 else:
                     items.append((new_key, v))
             return dict(items)
-        
-        # Handle reactive section specially
+
+        # Handle reactive section manually and skip flattening it
         if 'reactive' in config_dict:
             reactive_config = config_dict['reactive']
-            kwargs['reactive'] = {}
-            kwargs['reactive']['enabled'] = reactive_config.get('enabled', True)
-            kwargs['reactive']['timing'] = reactive_config.get('timing', 'all')
-            kwargs['reactive']['tsteps'] = reactive_config.get('tsteps', [])
-            
-            # Remove reactive from config_dict for general processing
-            remaining_dict = {k: v for k, v in config_dict.items() if k != 'reactive'}
-        else:
-            remaining_dict = config_dict
-        
-        # Flatten all other nested structures
+            kwargs['reactive'] = {
+                'enabled': reactive_config.get('enabled', True),
+                'timing': reactive_config.get('timing', 'all'),
+                'tsteps': reactive_config.get('tsteps', []),
+                'externalio': reactive_config.get('externalio', False)
+            }
+
+        # Flatten everything *except* 'reactive'
+        remaining_dict = {k: v for k, v in config_dict.items() if k != 'reactive'}
         flattened = flatten_dict(remaining_dict)
-        kwargs.update(flattened)
         
+        # Important: remove any reactive_* keys that may be left from TOML
+        for k in list(flattened.keys()):
+            if k.startswith("reactive_"):
+                del flattened[k]
+
+        kwargs.update(flattened)
         return cls(**kwargs)
 
 
@@ -430,6 +358,7 @@ class MF6RTMConfig:
         lines = [f"MF6RTM will run with the following configuration:"]
         lines.append(f"  Reactive: {self.reactive_enabled}")
         lines.append(f"  Reaction timing: {self.reactive_timing}")
+        lines.append(f"  Externalio flag: {self.reactive_externalio}")
 
         if self.reactive_timing == 'user' and self.reactive_tsteps:
             lines.append(f"  User-defined time steps ({len(self.reactive_tsteps)} total):")

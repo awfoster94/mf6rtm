@@ -14,8 +14,6 @@ from mf6rtm.solver import solve, DT_FMT, time_units_dict
 from mf6rtm import utils
 from mf6rtm.config import MF6RTMConfig
 from phreeqcrm import yamlphreeqcrm
-import yaml
-
 
 class Block:
     """Base class for PHREEQC input "keyword data blocks".
@@ -796,11 +794,13 @@ class Mup3d(object):
 
     def write_internal_parameters(self, internals = {
                                                     "equilibrium_phases": ["si"],
-                                                    "kinetic_phases": ["parms", "formula"],
+                                                    "kinetic_phases": ["parms", "formula", "steps"],
                                                     "exchange_phases": ["dummy"]
                                                     }
                                     ):
         """Add non-external attributes to the config object."""
+
+        self.add_read_external_files_flag_to_config(flag=True)
         for key in internals.keys():
             attr_list = internals[key]
             phase_obj = getattr(self, key)
@@ -826,6 +826,14 @@ class Mup3d(object):
                         if not hasattr(self.config, attr_name):
                             self.config.add_new_configuration(**{attr_name: data[name][item]})
 
+
+    def add_read_external_files_flag_to_config(self, flag=True):
+        """Add a flag to the config object to indicate whether to read external files."""
+        if not hasattr(self.config, 'reactive_externalio'):
+            self.config.add_new_configuration(**{'reactive_externalio': flag})
+        else:
+            self.config.reactive_externalio = flag
+        return self.config.reactive_externalio
 
     def save_mup3d(self, filename='mup3d.pkl'):
         """
@@ -1022,7 +1030,7 @@ class Mup3d(object):
                     for ly in range(arr.shape[0]):
                         filepath = os.path.join(self.wd, f"{attr}.{name}.{prop}.layer{ly+1}.txt")
                         with open(filepath, "w") as fh:
-                            fh.write("\n".join(str(val) for val in arr[ly].flatten()))
+                            fh.write("\n".join(f"{val:.10e}" for val in arr[ly].flatten()))
 
     def _write_phreeqc_init_file(self, filename='mf6rtm.yaml'):
         '''Write the phreeqc init yaml file'''

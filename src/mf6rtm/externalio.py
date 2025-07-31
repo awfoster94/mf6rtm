@@ -18,9 +18,17 @@ class Regenerator:
     """
     A class to regenerate a Mup3d object from a script file.
     """
-    def __init__(self, wd='.', phinp='phinp.dat'):
+    def __init__(self, wd='.', phinp='phinp.dat', yamlfile='mf6rtm.yaml'):
+        """
+        Initialize the Regenerator with the working directory and phinp file.
+
+        Parameters:
+            wd (str): Working directory where the phinp file is located.
+            phinp (str): Name of the phinp file.
+            yamlfile (str): Name of the YAML file to be used.
+        """
         self.wd = os.path.abspath(wd)
-        self.yamlfile = os.path.join(self.wd, 'mf6rtm.yaml')
+        self.yamlfile = os.path.join(self.wd, yamlfile)
         self.phinp = phinp
         self.config = MF6RTMConfig.from_toml_file(os.path.join(self.wd, 'mf6rtm.toml')).to_dict()
         self.grid_shape = grid_dimensions(Mf6API(self.wd, os.path.join(self.wd, 'libmf6.dll')))
@@ -28,6 +36,24 @@ class Regenerator:
         self.nxyz = total_cells_in_grid(Mf6API(self.wd, os.path.join(self.wd, 'libmf6.dll')))
 
         # self.validate_external_files()
+
+    @classmethod
+    def regenerate_from_external_files(cls, wd='.', 
+                                       phinpfile='phinp.dat', 
+                                       yamlfile='mf6rtm.yaml',
+                                       prefix='_'):
+        """
+        Class method to execute the regeneration process.
+        """
+        instance = cls(
+            wd=wd, 
+            phinp=phinpfile, 
+            yamlfile=yamlfile
+
+        )
+        instance.write_new_script(filename=f"{prefix}{phinpfile}")
+        instance.update_yaml(filename=f"{prefix}{yamlfile}")
+        return instance
 
     def validate_external_files(self):
         """
@@ -39,12 +65,9 @@ class Regenerator:
         
         for key, value in self.config.items():
             if key is not 'reactive':
-                print(f"Key: {key}")
                 names = self.config[key]['names'] if 'names' in self.config[key] else ValueError(f"Key '{key}' does not have 'names' attribute.") 
                 for nme in names:
-                    print(f"Name: {nme}")
                     for lay in range(self.nlay):
-                        print(f"Layer: {lay}")
                         file_path = os.path.join(self.wd, f"{key}.{nme}.m0.layer{lay+1}.txt")
                     if not os.path.exists(file_path):
                         raise FileNotFoundError(f"Required file '{file_path}' for key '{key}' not found in working directory '{self.wd}'.")
@@ -72,7 +95,7 @@ class Regenerator:
         self.solution_blocks = block
         return block
 
-    def update_yaml(self, filename='mf6rtm.yaml'):
+    def update_yaml(self, filename='_mf6rtm.yaml'):
 
         """Update the YAML file with the regenerated script and initial conditions.
         """
@@ -101,11 +124,10 @@ class Regenerator:
         time = 0.0
         status = yamlphreeqcrm.YAMLSetTime(time)
 
-        # status = yamlphreeqcrm.YAMLRunFile(True, True, True, self.regenerated_phinp)
-        # status = yamlphreeqcrm.YAMLInitialPhreeqc2Module(ic1_flatten)
         fdir = os.path.join(self.wd, filename)
         status = yamlphreeqcrm.WriteYAMLDoc(fdir)
 
+        self.yamlfile = filename
         return ic1_flatten
 
     def get_postfix_block(self, script):
@@ -146,7 +168,7 @@ class Regenerator:
         self.regenerated_script = ''.join(new_script).strip()
         return self.regenerated_script
 
-    def write_new_script(self, filename='reg_phinp.dat'):
+    def write_new_script(self, filename='_phinp.dat'):
         """
         Write the regenerated script to a file.
         """
@@ -157,8 +179,6 @@ class Regenerator:
         print(f"New script written to {os.path.join(self.wd, filename)}")
         self.regenerated_phinp = os.path.join(self.wd, filename)
         return self.regenerated_phinp
-    
-
 
     def generate_equilibrium_phases_blocks(self):
         """
@@ -245,22 +265,17 @@ class Regenerator:
         # Read phase files following the same logic as validate_external_files
         for key, value in self.config.items():
             if key != 'reactive':
-                # print(f"Processing key: {key}")
-                
                 if 'names' not in self.config[key]:
                     print(f"Warning: Key '{key}' does not have 'names' attribute, skipping.")
                     continue
-                    
                 names = self.config[key]['names']
                 file_data[key] = {}
                 
                 for nme in names:
-                    # print(f"Processing name: {nme}")
                     layer_arrays = []
                     
                     # Load all layers for this name
                     for lay in range(self.nlay):
-                        # print(f"Processing layer: {lay + 1}")
                         file_path = os.path.join(self.wd, f"{key}.{nme}.m0.layer{lay+1}.txt")
                         
                         if os.path.exists(file_path):
@@ -268,7 +283,6 @@ class Regenerator:
                                 # Load the array using numpy
                                 array_data = np.loadtxt(file_path)
                                 layer_arrays.append(array_data)
-                                # print(f"Loaded array from {file_path}, shape: {array_data.shape}")
                             except Exception as e:
                                 print(f"Warning: Could not load file {file_path}: {e}")
                                 layer_arrays.append(None)
@@ -285,12 +299,11 @@ class Regenerator:
                                 # Stack arrays along the first axis (layers)
                                 merged_array = np.stack(valid_arrays, axis=0)
                                 
-                                # Reshape to grid dimensions: (nlay, nrow, ncol)
+                                # Reshape to grid dimensions
                                 nlay, nrow, ncol = self.grid_shape
                                 reshaped_array = merged_array.reshape(nlay, nrow, ncol)
                                 
                                 file_data[key][nme] = reshaped_array
-                                # print(f"Merged and reshaped {nme} to shape: {reshaped_array.shape}")
                             else:
                                 file_data[key][nme] = None
                                 print(f"Warning: No valid arrays found for {nme}")
@@ -325,6 +338,3 @@ class Regenerator:
         
         return self.config
 
-    def regenerate(self):
-        # Implementation of regeneration logic goes here
-        pass

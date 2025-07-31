@@ -13,12 +13,10 @@ def flatten_list(xss):
     """Flatten a list of lists"""
     return [x for xs in xss for x in xs]
 
-
 def concentration_l_to_m3(x):
     """Convert M/L to M/m3"""
     c = x * 1e3
     return c
-
 
 def concentration_m3_to_l(x):
     """Convert M/L to M/m3"""
