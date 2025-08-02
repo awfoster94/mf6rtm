@@ -399,9 +399,19 @@ class Mup3d(object):
         Returns:
         None
         """
-        assert os.path.exists(database), f'{database} not found'
+        try:
+            assert os.path.exists(database), f"{database} not found"
+            database = os.path.abspath(database)
+        except AssertionError:
+            try:
+                alt_path = os.path.join(self.wd, database)
+                assert os.path.exists(alt_path), f"{database} not found inside the model dir"
+                database = alt_path  # update to the valid path
+            except AssertionError:
+                print(f"Couldn't find the database in '{database}' or '{alt_path}'")
+
         # get absolute path of the database
-        database = os.path.abspath(database)
+        
         self.database = database
 
     def set_postfix(self, postfix):
@@ -436,7 +446,7 @@ class Mup3d(object):
         filename = os.path.join(self.wd, 'phinp.dat')
         self.phinp = filename
         # assert that database in self.database exists
-        assert os.path.exists(self.database), f'{self.database} not found'
+        assert os.path.exists(self.database), f'{self.database} not found inside the model dir'
 
         # Check if all compounds are in the database
         names = utils.get_compound_names(self.database)
@@ -1042,7 +1052,7 @@ class Mup3d(object):
         status = phreeqcrm_yaml.YAMLUseSolutionDensityVolume(False)
 
         # Open files for phreeqcrm logging
-        status = phreeqcrm_yaml.YAMLSetFilePrefix(os.path.join(self.wd, '_phreeqc'))
+        status = phreeqcrm_yaml.YAMLSetFilePrefix(os.path.join('_phreeqc'))
         status = phreeqcrm_yaml.YAMLOpenFiles()
 
         # set some properties
@@ -1073,8 +1083,8 @@ class Mup3d(object):
         phreeqcrm_yaml.YAMLSetRepresentativeVolume(rv)
 
         # Load database
-        status = phreeqcrm_yaml.YAMLLoadDatabase(self.database)
-        status = phreeqcrm_yaml.YAMLRunFile(True, True, True, self.phinp)
+        status = phreeqcrm_yaml.YAMLLoadDatabase(os.path.basename(self.database))
+        status = phreeqcrm_yaml.YAMLRunFile(True, True, True, os.path.basename(self.phinp))
 
         # Clear contents of workers and utility
         input = "DELETE; -all"

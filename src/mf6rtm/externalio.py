@@ -111,7 +111,7 @@ class Regenerator:
 
         ic1_flatten = ic1.flatten('F')
 
-        status = yamlphreeqcrm.YAMLRunFile(True, True, True, self.regenerated_phinp)
+        status = yamlphreeqcrm.YAMLRunFile(True, True, True, os.path.basename(self.regenerated_phinp))
         # Clear contents of workers and utility
         input = "DELETE; -all"
         status = yamlphreeqcrm.YAMLRunString(True, False, True, input)
