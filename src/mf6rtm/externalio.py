@@ -18,7 +18,8 @@ class Regenerator:
     """
     A class to regenerate a Mup3d object from a script file.
     """
-    def __init__(self, wd='.', phinp='phinp.dat', yamlfile='mf6rtm.yaml'):
+    def __init__(self, wd='.', phinp='phinp.dat', 
+                 yamlfile='mf6rtm.yaml', dllfile='libmf6.dll'):
         """
         Initialize the Regenerator with the working directory and phinp file.
 
@@ -31,9 +32,9 @@ class Regenerator:
         self.yamlfile = os.path.join(self.wd, yamlfile)
         self.phinp = phinp
         self.config = MF6RTMConfig.from_toml_file(os.path.join(self.wd, 'mf6rtm.toml')).to_dict()
-        self.grid_shape = grid_dimensions(Mf6API(self.wd, os.path.join(self.wd, 'libmf6.dll')))
+        self.grid_shape = grid_dimensions(Mf6API(self.wd, os.path.join(self.wd, dllfile)))
         self.nlay = self.grid_shape[0]
-        self.nxyz = total_cells_in_grid(Mf6API(self.wd, os.path.join(self.wd, 'libmf6.dll')))
+        self.nxyz = total_cells_in_grid(Mf6API(self.wd, os.path.join(self.wd, dllfile)))
 
         # self.validate_external_files()
 
@@ -41,6 +42,7 @@ class Regenerator:
     def regenerate_from_external_files(cls, wd='.', 
                                        phinpfile='phinp.dat', 
                                        yamlfile='mf6rtm.yaml',
+                                       dllfile='libmf6.dll',
                                        prefix='_'):
         """
         Class method to execute the regeneration process.
@@ -48,7 +50,8 @@ class Regenerator:
         instance = cls(
             wd=wd, 
             phinp=phinpfile, 
-            yamlfile=yamlfile
+            yamlfile=yamlfile,
+            dllfile=dllfile
 
         )
         instance.write_new_script(filename=f"{prefix}{phinpfile}")

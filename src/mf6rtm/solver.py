@@ -75,7 +75,9 @@ def prep_to_run(wd: PathLike) -> tuple[PathLike, PathLike]:
         print("WARNING: Flag for external IO mode is active")
         regcls = Regenerator.regenerate_from_external_files(wd=wd, 
                                                 phinpfile='phinp.dat',
-                                                yamlfile='mf6rtm.yaml')
+                                                yamlfile='mf6rtm.yaml',
+                                                dllfile=dll
+                                                )
         yamlfile = regcls.yamlfile
     else:
         yamlfile = os.path.join(wd, "mf6rtm.yaml")
