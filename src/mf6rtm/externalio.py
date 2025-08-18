@@ -351,16 +351,10 @@ class SelectedOutput:
         self.sout_fname = "sout.csv"
         self.get_selected_output_on = True
 
-    def write_inner_arrays(self, conc_array, fname='_mf6tophr.csv'):
-        sim = self.mf6api.sim
-        dis = sim.get_model(sim.model_names[0]).dis
-
-        # if np.array(conc_array).shape
+    def __write_inner_arrays(self, conc_array, fname='_mf6tophr.csv'):
+        """Export inner coupling arrays"""
         arr = np.reshape(np.array(conc_array), 
                          (self.phreeqcbmi.ncomps, self.mf6rtm.nxyz)).T
-        print(np.array(arr).shape)
-        # arr = np.array(conc_array).T
-
         time_row = np.full((arr.shape[0], 1), self.mf6rtm.ctime)
         cellid_row = np.arange(self.mf6rtm.nxyz).reshape(-1, 1)
         arr = np.hstack([time_row,cellid_row, arr])

@@ -382,7 +382,7 @@ class Mf6RTM(object):
                     f"{gwt_model_name.upper()}/X",
                     utils.concentration_l_to_m3(conc_dict[c]),
                 )
-        self.selected_output.write_inner_arrays(c_dbl_vect, 
+        self.selected_output.__write_inner_arrays(c_dbl_vect, 
                                                 fname='_phr_to_mf6.csv')
         return c_dbl_vect
 
@@ -443,7 +443,7 @@ class Mf6RTM(object):
                     )
                 )
         c_dbl_vect = np.reshape(mf6_conc_array, self.nxyz * self.phreeqcbmi.ncomps)
-        self.selected_output.write_inner_arrays(c_dbl_vect, 
+        self.selected_output.__write_inner_arrays(c_dbl_vect, 
                                                 fname='_mf6_to_phr.csv')
         self.phreeqcbmi.SetConcentrations(c_dbl_vect)
 
