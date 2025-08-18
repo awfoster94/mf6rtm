@@ -351,7 +351,7 @@ class SelectedOutput:
         self.sout_fname = "sout.csv"
         self.get_selected_output_on = True
 
-    def __write_inner_arrays(self, conc_array, fname='_mf6tophr.csv'):
+    def write_inner_arrays(self, conc_array, fname='_mf6tophr.csv'):
         """Export inner coupling arrays"""
         arr = np.reshape(np.array(conc_array), 
                          (self.phreeqcbmi.ncomps, self.mf6rtm.nxyz)).T
