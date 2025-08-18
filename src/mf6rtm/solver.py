@@ -382,6 +382,8 @@ class Mf6RTM(object):
                     f"{gwt_model_name.upper()}/X",
                     utils.concentration_l_to_m3(conc_dict[c]),
                 )
+        self.selected_output.write_inner_arrays(c_dbl_vect, 
+                                                fname='_phr_to_mf6.csv')
         return c_dbl_vect
 
     def _check_previous_conc_exists(self) -> bool:
@@ -440,8 +442,9 @@ class Mf6RTM(object):
                         )
                     )
                 )
-
         c_dbl_vect = np.reshape(mf6_conc_array, self.nxyz * self.phreeqcbmi.ncomps)
+        self.selected_output.write_inner_arrays(c_dbl_vect, 
+                                                fname='_mf6_to_phr.csv')
         self.phreeqcbmi.SetConcentrations(c_dbl_vect)
 
         # set the kper and kstp
@@ -450,78 +453,6 @@ class Mf6RTM(object):
         )  # FIXME: calling this func here is not ideal
 
         return c_dbl_vect
-
-    # def _update_selected_output(self) -> None:
-    #     """Update the selected output dataframe and save to attribute"""
-    #     self._get_selected_output()
-    #     updf = pd.concat(
-    #         [
-    #             self.phreeqcbmi.soutdf.astype(self._current_soutdf.dtypes),
-    #             self._current_soutdf,
-    #         ]
-    #     )
-    #     self._update_soutdf(updf)
-
-    # def __replace_inactive_cells_in_sout(self, sout, diffmask):
-    #     """Function to replace inactive cells in the selected output dataframe"""
-    #     # match headers in components closest string
-
-    #     inactive_idx = utils.get_indices(0, diffmask)
-
-    #     sout[:, inactive_idx] = self._sout_k[:, inactive_idx]
-    #     return sout
-
-    # def _get_selected_output(self) -> None:
-    #     """Get the selected output from phreeqc bmi and replace skipped reactive cells with previous conc"""
-    #     # selected ouput
-    #     self.phreeqcbmi.set_scalar("NthSelectedOutput", 0)
-    #     sout = self.phreeqcbmi.GetSelectedOutput()
-    #     sout = [sout[i : i + self.nxyz] for i in range(0, len(sout), self.nxyz)]
-    #     sout = np.array(sout)
-    #     if self._check_inactive_cells_exist(self.diffmask) and hasattr(self, "_sout_k"):
-
-    #         sout = self.__replace_inactive_cells_in_sout(sout, self.diffmask)
-    #     self._sout_k = sout  # save sout to a private attribute
-    #     # add time to selected ouput
-    #     sout[0] = np.ones_like(sout[0]) * (self.ctime + self.time_step)
-    #     df = pd.DataFrame(columns=self.phreeqcbmi.soutdf.columns)
-    #     for col, arr in zip(df.columns, sout):
-    #         df[col] = arr
-    #     self._current_soutdf = df
-
-    # def _update_soutdf(self, df: pd.DataFrame) -> None:
-    #     """Update the selected output dataframe to phreeqcrm object"""
-    #     self.phreeqcbmi.soutdf = df
-
-    # def _check_sout_exist(self) -> bool:
-    #     """Check if selected output file exists"""
-    #     return os.path.exists(os.path.join(self.wd, self.sout_fname))
-
-    # def _write_sout_headers(self) -> None:
-    #     """Write selected output headers to a file"""
-    #     with open(os.path.join(self.wd, self.sout_fname), "w") as f:
-    #         f.write(",".join(self.phreeqcbmi.sout_headers))
-    #         f.write("\n")
-
-    # def _rm_sout_file(self) -> None:
-    #     """Remove the selected output file"""
-    #     try:
-    #         os.remove(os.path.join(self.wd, self.sout_fname))
-    #     except:
-    #         pass
-
-    # def _append_to_soutdf_file(self) -> None:
-    #     """Append the current selected output to the selected output file"""
-    #     assert not self._current_soutdf.empty, "current sout is empty"
-    #     self._current_soutdf.to_csv(
-    #         os.path.join(self.wd, self.sout_fname), mode="a", index=False, header=False
-    #     )
-
-    # def _export_soutdf(self) -> None:
-    #     """Export the selected output dataframe to a csv file"""
-    #     self.phreeqcbmi.soutdf.to_csv(
-    #         os.path.join(self.wd, self.sout_fname), index=False
-    #     )
 
     def _solve(self) -> bool:
         """Alias for the solve method to provide backward compatibility"""
