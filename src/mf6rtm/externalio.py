@@ -1,9 +1,11 @@
 import os
 import numpy as np
+import pandas as pd
 from mf6rtm.config import MF6RTMConfig
 from mf6rtm.mf6api import Mf6API
 from mf6rtm.discretization import grid_dimensions, total_cells_in_grid
 from mf6rtm.yaml_reader import load_yaml_to_phreeqcrm
+from mf6rtm.utils import get_indices
 
 ic_position = {
     'equilibrium_phases': 1, 
@@ -341,3 +343,82 @@ class Regenerator:
         
         return self.config
 
+class SelectedOutput:
+    def __init__(self, mf6rtm):
+        self.mf6rtm = mf6rtm
+        self.phreeqcbmi = mf6rtm.phreeqcbmi
+        self.mf6api = mf6rtm.mf6api
+        self.sout_fname = "sout.csv"
+        self.get_selected_output_on = True
+
+    def _update_selected_output(self) -> None:
+        """Update the selected output dataframe and save to attribute"""
+        self._get_selected_output()
+        updf = pd.concat(
+            [
+                self.phreeqcbmi.soutdf.astype(self._current_soutdf.dtypes),
+                self._current_soutdf,
+            ]
+        )
+        self._update_soutdf(updf)
+
+    def __replace_inactive_cells_in_sout(self, sout, diffmask):
+        """Function to replace inactive cells in the selected output dataframe"""
+        # match headers in components closest string
+
+        inactive_idx = get_indices(0, diffmask)
+
+        sout[:, inactive_idx] = self._sout_k[:, inactive_idx]
+        return sout
+
+    def _get_selected_output(self) -> None:
+        """Get the selected output from phreeqc bmi and replace skipped reactive cells with previous conc"""
+        # selected ouput
+        self.phreeqcbmi.set_scalar("NthSelectedOutput", 0)
+        sout = self.phreeqcbmi.GetSelectedOutput()
+        sout = [sout[i : i + self.mf6rtm.nxyz] for i in range(0, len(sout), self.mf6rtm.nxyz)]
+        sout = np.array(sout)
+        if self.mf6rtm._check_inactive_cells_exist(self.mf6rtm.diffmask) and hasattr(self, "_sout_k"):
+
+            sout = self.__replace_inactive_cells_in_sout(sout, self.mf6rtm.diffmask)
+        self._sout_k = sout  # save sout to a private attribute
+        # add time to selected ouput
+        sout[0] = np.ones_like(sout[0]) * (self.mf6rtm.ctime + self.mf6rtm.time_step)
+        df = pd.DataFrame(columns=self.phreeqcbmi.soutdf.columns)
+        for col, arr in zip(df.columns, sout):
+            df[col] = arr
+        self._current_soutdf = df
+
+    def _update_soutdf(self, df: pd.DataFrame) -> None:
+        """Update the selected output dataframe to phreeqcrm object"""
+        self.phreeqcbmi.soutdf = df
+
+    def _check_sout_exist(self) -> bool:
+        """Check if selected output file exists"""
+        return os.path.exists(os.path.join(self.mf6rtm.wd, self.sout_fname))
+
+    def _write_sout_headers(self) -> None:
+        """Write selected output headers to a file"""
+        with open(os.path.join(self.mf6rtm.wd, self.sout_fname), "w") as f:
+            f.write(",".join(self.phreeqcbmi.sout_headers))
+            f.write("\n")
+
+    def _rm_sout_file(self) -> None:
+        """Remove the selected output file"""
+        try:
+            os.remove(os.path.join(self.mf6rtm.wd, self.sout_fname))
+        except:
+            pass
+
+    def _append_to_soutdf_file(self) -> None:
+        """Append the current selected output to the selected output file"""
+        assert not self._current_soutdf.empty, "current sout is empty"
+        self._current_soutdf.to_csv(
+            os.path.join(self.mf6rtm.wd, self.sout_fname), mode="a", index=False, header=False
+        )
+
+    def _export_soutdf(self) -> None:
+        """Export the selected output dataframe to a csv file"""
+        self.phreeqcbmi.soutdf.to_csv(
+            os.path.join(self.mf6rtm.wd, self.sout_fname), index=False
+        )

@@ -19,6 +19,7 @@ from mf6rtm.phreeqcbmi import PhreeqcBMI
 from mf6rtm import utils
 from mf6rtm.discretization import total_cells_in_grid
 from mf6rtm.config import MF6RTMConfig
+from mf6rtm.externalio import SelectedOutput
 
 # global variables
 DT_FMT = "%Y-%m-%d %H:%M:%S"
@@ -181,10 +182,12 @@ class Mf6RTM(object):
         self.phreeqcbmi = phreeqcbmi
         self.charge_offset = 0.0
         self.wd = Path(wd)
-        self.sout_fname = "sout.csv"
+        # self.sout_fname = "sout.csv"
         self.epsaqu = 0.0
         self.fixed_components = None
-        self.get_selected_output_on = True
+        self.selected_output = SelectedOutput(self)
+
+        # self.get_selected_output_on = True
 
         # set component model dictionary
         self.component_model_dict = self._create_component_model_dict()
@@ -293,15 +296,15 @@ class Mf6RTM(object):
     def _prepare_to_solve(self) -> None:
         """Prepare the model to solve"""
         # check if sout fname exists
-        if self._check_sout_exist():
+        if self.selected_output._check_sout_exist():
             # if found remove it
-            self._rm_sout_file()
+            self.selected_output._rm_sout_file()
 
         self.mf6api._prepare_mf6()
         self.phreeqcbmi._prepare_phreeqcrm_bmi()
 
         # get and write sout headers
-        self._write_sout_headers()
+        self.selected_output._write_sout_headers()
 
     def _set_ctime(self) -> float:
         """Set the current time of the simulation from mf6api"""
@@ -448,77 +451,77 @@ class Mf6RTM(object):
 
         return c_dbl_vect
 
-    def _update_selected_output(self) -> None:
-        """Update the selected output dataframe and save to attribute"""
-        self._get_selected_output()
-        updf = pd.concat(
-            [
-                self.phreeqcbmi.soutdf.astype(self._current_soutdf.dtypes),
-                self._current_soutdf,
-            ]
-        )
-        self._update_soutdf(updf)
+    # def _update_selected_output(self) -> None:
+    #     """Update the selected output dataframe and save to attribute"""
+    #     self._get_selected_output()
+    #     updf = pd.concat(
+    #         [
+    #             self.phreeqcbmi.soutdf.astype(self._current_soutdf.dtypes),
+    #             self._current_soutdf,
+    #         ]
+    #     )
+    #     self._update_soutdf(updf)
 
-    def __replace_inactive_cells_in_sout(self, sout, diffmask):
-        """Function to replace inactive cells in the selected output dataframe"""
-        # match headers in components closest string
+    # def __replace_inactive_cells_in_sout(self, sout, diffmask):
+    #     """Function to replace inactive cells in the selected output dataframe"""
+    #     # match headers in components closest string
 
-        inactive_idx = utils.get_indices(0, diffmask)
+    #     inactive_idx = utils.get_indices(0, diffmask)
 
-        sout[:, inactive_idx] = self._sout_k[:, inactive_idx]
-        return sout
+    #     sout[:, inactive_idx] = self._sout_k[:, inactive_idx]
+    #     return sout
 
-    def _get_selected_output(self) -> None:
-        """Get the selected output from phreeqc bmi and replace skipped reactive cells with previous conc"""
-        # selected ouput
-        self.phreeqcbmi.set_scalar("NthSelectedOutput", 0)
-        sout = self.phreeqcbmi.GetSelectedOutput()
-        sout = [sout[i : i + self.nxyz] for i in range(0, len(sout), self.nxyz)]
-        sout = np.array(sout)
-        if self._check_inactive_cells_exist(self.diffmask) and hasattr(self, "_sout_k"):
+    # def _get_selected_output(self) -> None:
+    #     """Get the selected output from phreeqc bmi and replace skipped reactive cells with previous conc"""
+    #     # selected ouput
+    #     self.phreeqcbmi.set_scalar("NthSelectedOutput", 0)
+    #     sout = self.phreeqcbmi.GetSelectedOutput()
+    #     sout = [sout[i : i + self.nxyz] for i in range(0, len(sout), self.nxyz)]
+    #     sout = np.array(sout)
+    #     if self._check_inactive_cells_exist(self.diffmask) and hasattr(self, "_sout_k"):
 
-            sout = self.__replace_inactive_cells_in_sout(sout, self.diffmask)
-        self._sout_k = sout  # save sout to a private attribute
-        # add time to selected ouput
-        sout[0] = np.ones_like(sout[0]) * (self.ctime + self.time_step)
-        df = pd.DataFrame(columns=self.phreeqcbmi.soutdf.columns)
-        for col, arr in zip(df.columns, sout):
-            df[col] = arr
-        self._current_soutdf = df
+    #         sout = self.__replace_inactive_cells_in_sout(sout, self.diffmask)
+    #     self._sout_k = sout  # save sout to a private attribute
+    #     # add time to selected ouput
+    #     sout[0] = np.ones_like(sout[0]) * (self.ctime + self.time_step)
+    #     df = pd.DataFrame(columns=self.phreeqcbmi.soutdf.columns)
+    #     for col, arr in zip(df.columns, sout):
+    #         df[col] = arr
+    #     self._current_soutdf = df
 
-    def _update_soutdf(self, df: pd.DataFrame) -> None:
-        """Update the selected output dataframe to phreeqcrm object"""
-        self.phreeqcbmi.soutdf = df
+    # def _update_soutdf(self, df: pd.DataFrame) -> None:
+    #     """Update the selected output dataframe to phreeqcrm object"""
+    #     self.phreeqcbmi.soutdf = df
 
-    def _check_sout_exist(self) -> bool:
-        """Check if selected output file exists"""
-        return os.path.exists(os.path.join(self.wd, self.sout_fname))
+    # def _check_sout_exist(self) -> bool:
+    #     """Check if selected output file exists"""
+    #     return os.path.exists(os.path.join(self.wd, self.sout_fname))
 
-    def _write_sout_headers(self) -> None:
-        """Write selected output headers to a file"""
-        with open(os.path.join(self.wd, self.sout_fname), "w") as f:
-            f.write(",".join(self.phreeqcbmi.sout_headers))
-            f.write("\n")
+    # def _write_sout_headers(self) -> None:
+    #     """Write selected output headers to a file"""
+    #     with open(os.path.join(self.wd, self.sout_fname), "w") as f:
+    #         f.write(",".join(self.phreeqcbmi.sout_headers))
+    #         f.write("\n")
 
-    def _rm_sout_file(self) -> None:
-        """Remove the selected output file"""
-        try:
-            os.remove(os.path.join(self.wd, self.sout_fname))
-        except:
-            pass
+    # def _rm_sout_file(self) -> None:
+    #     """Remove the selected output file"""
+    #     try:
+    #         os.remove(os.path.join(self.wd, self.sout_fname))
+    #     except:
+    #         pass
 
-    def _append_to_soutdf_file(self) -> None:
-        """Append the current selected output to the selected output file"""
-        assert not self._current_soutdf.empty, "current sout is empty"
-        self._current_soutdf.to_csv(
-            os.path.join(self.wd, self.sout_fname), mode="a", index=False, header=False
-        )
+    # def _append_to_soutdf_file(self) -> None:
+    #     """Append the current selected output to the selected output file"""
+    #     assert not self._current_soutdf.empty, "current sout is empty"
+    #     self._current_soutdf.to_csv(
+    #         os.path.join(self.wd, self.sout_fname), mode="a", index=False, header=False
+    #     )
 
-    def _export_soutdf(self) -> None:
-        """Export the selected output dataframe to a csv file"""
-        self.phreeqcbmi.soutdf.to_csv(
-            os.path.join(self.wd, self.sout_fname), index=False
-        )
+    # def _export_soutdf(self) -> None:
+    #     """Export the selected output dataframe to a csv file"""
+    #     self.phreeqcbmi.soutdf.to_csv(
+    #         os.path.join(self.wd, self.sout_fname), index=False
+    #     )
 
     def _solve(self) -> bool:
         """Alias for the solve method to provide backward compatibility"""
@@ -556,14 +559,12 @@ class Mf6RTM(object):
         self._prepare_to_solve()
 
         # check sout was created
-        assert self._check_sout_exist(), f"{self.sout_fname} not found"
+        assert self.selected_output._check_sout_exist(), f"{self.selected_output.sout_fname} not found"
 
         print("Starting Solution at {0}".format(sim_start.strftime(DT_FMT)))
         ctime = self._set_ctime()
         etime = self._set_etime()
         while ctime < etime:
-            # temp_time = datetime.now()
-            # print(f"Starting solution at {temp_time.strftime(DT_FMT)}")
             # length of the current solve time
             dt = self._set_time_step()
             self.mf6api.prepare_time_step(dt)
@@ -573,7 +574,6 @@ class Mf6RTM(object):
             self.get_saturation_from_mf6()
             # check_reactive_kstp()
             if self.check_reactive_tstep():
-                # print(self.check_reactive_tstep)
                 c_dbl_vect = self._transfer_array_to_phreeqcrm()
                 self._set_conc_at_current_kstep(c_dbl_vect)
                 if ctime == 0.0:
@@ -590,11 +590,11 @@ class Mf6RTM(object):
                 # solve reactions
                 self.phreeqcbmi._solve_phreeqcrm(dt, diffmask=self.diffmask)
                 c_dbl_vect = self._transfer_array_to_mf6()
-                if self.get_selected_output_on:
+                if self.selected_output.get_selected_output_on:
                     # get sout and update df
-                    self._update_selected_output()
+                    self.selected_output._update_selected_output()
                     # append current sout rows to file
-                    self._append_to_soutdf_file()
+                    self.selected_output._append_to_soutdf_file()
                 self._set_conc_at_previous_kstep(c_dbl_vect)
 
             self.mf6api.finalize_time_step()
@@ -656,7 +656,6 @@ def get_conc_change_mask(
     # where values <0 put -1 else 1
     diff = np.where(diff == 0, 0, 1)
     return diff
-
 
 def mrbeaker() -> str:
     """ASCII art of Mr. Beaker"""
