@@ -5,9 +5,8 @@ on:
   #   - cron: '0 8 * * *' # run at 8 AM UTC (12 am PST)
   push:
     branches:
-      # - main
       - develop
-      # - 'release*'
+      - feature/externalio
   pull_request:
     branches: [main, develop, feature/externalio]
 
