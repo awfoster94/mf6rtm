@@ -1,19 +1,16 @@
 from pathlib import Path
 import os
-import sys
-import platform
 
-from datetime import datetime
 import pandas as pd
+
 import numpy as np
-import matplotlib.pyplot as plt
-# import tempfile
 import shutil 
 import pytest
 
 import flopy
-import mf6rtm
-from mf6rtm import utils, solver, mup3d
+from mf6rtm.simulation import solver
+from mf6rtm import utils, mup3d
+
 from autotest.conftest import make_dir_writable
 
 cwd = os.path.abspath(os.path.dirname(__file__))
@@ -680,7 +677,7 @@ def test02(prefix = 'test02'):
     modelwd = os.path.join(cwd, f'{prefix}')
     model.set_wd(os.path.join(modelwd))
 
-    #set database
+    #set datamup3d
     database = os.path.join(databasews, f'pht3d_datab_walter1994.dat')
     model.set_database(database)
 
@@ -689,7 +686,7 @@ def test02(prefix = 'test02'):
 
     postfix = os.path.join(dataws, f'{prefix}_postfix.phqr')
     model.set_postfix(postfix)
-
+    model.set_config(reactive_externalio=True)
     model.initialize()
 
     wellchem = mup3d.ChemStress('wel')
@@ -1146,7 +1143,7 @@ def run_yaml(prefix):
     '''Run model from yaml file'''
     wd = os.path.join(prefix)
     #run the model
-    mf6rtm.solve(wd)
+    mup3d.solve(wd)
     return
 
 def run_test(prefix, model, mf6sim, *args, **kwargs):
@@ -1179,8 +1176,8 @@ def run_test(prefix, model, mf6sim, *args, **kwargs):
     # return
 
 
-# if __name__ == '__main__':
-#     test01()
+if __name__ == '__main__':
+    test01()
 #     test01_yaml()
 
 
