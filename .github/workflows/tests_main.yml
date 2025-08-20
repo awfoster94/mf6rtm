@@ -9,7 +9,7 @@ on:
       - develop
       # - 'release*'
   pull_request:
-    branches: [main, develop, feat_userdefinedreactioncall]
+    branches: [main, develop, feature/externalio]
 
 jobs:
   test:
