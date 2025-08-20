@@ -2,15 +2,19 @@
 Base module of the mup3d package
 """
 
-from pathlib import Path
 import os
 import warnings
+import phreeqcrm
+import shutil
+import numpy as np
+
 warnings.filterwarnings("ignore")
 warnings.filterwarnings("ignore", category=DeprecationWarning)
+
 from typing import Union
-import pandas as pd
-import numpy as np
-import phreeqcrm
+from pathlib import Path
+from contextlib import contextmanager
+
 from mf6rtm.simulation.solver import solve, DT_FMT, time_units_dict
 from mf6rtm.utils import utils
 from mf6rtm.config import MF6RTMConfig
@@ -255,7 +259,7 @@ class Mup3d(object):
         self.name = name
         self.wd = None
         self.charge_offset = 0.0
-        self.database = os.path.join('database', 'pht3d_datab.dat')
+        self.database = os.path.join('pht3d_datab.dat')
         self.solutions = solutions
         self.init_temp = 25.0
         self.equilibrium_phases = None
@@ -404,6 +408,8 @@ class Mup3d(object):
         try:
             assert os.path.exists(database), f"{database} not found"
             database = os.path.abspath(database)
+            # database not in wd so copy it there for self containment
+            shutil.copy(database, os.path.join(self.wd, os.path.basename(database)))
         except AssertionError:
             try:
                 alt_path = os.path.join(self.wd, database)
@@ -677,8 +683,8 @@ class Mup3d(object):
     def write_simulation(self):
         """write phreqcrm simulation and configuration files"""
         self._write_phreeqc_init_file()
-        self.write_internal_parameters()
-        self.write_external_files_layered()
+        # self.write_internal_parameters()
+        # self.write_external_files_layered()
         self.save_config()
         print(f"Simulation saved in {self.wd}")
         return
@@ -1112,4 +1118,14 @@ class Mup3d(object):
 
     def run(self, reactive = None, nthread=1):
         '''Wrapper function to run the MF6RTM model'''
-        return solve(self.wd, reactive=reactive, nthread=nthread)
+        with working_dir(self.wd):
+            return solve(self.wd, reactive=reactive, nthread=nthread)
+
+@contextmanager
+def working_dir(path):
+    old_dir = os.getcwd()
+    try:
+        os.chdir(path)
+        yield
+    finally:
+        os.chdir(old_dir)
