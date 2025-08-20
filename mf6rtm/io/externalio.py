@@ -72,7 +72,7 @@ class Regenerator:
             raise FileNotFoundError(f"Required file '{self.phinp}' not found in working directory '{self.wd}'.")
         
         for key, value in self.config.items():
-            if key is not 'reactive':
+            if key != 'reactive':
                 names = self.config[key]['names'] if 'names' in self.config[key] else ValueError(f"Key '{key}' does not have 'names' attribute.") 
                 for nme in names:
                     for lay in range(self.nlay):
@@ -169,9 +169,16 @@ class Regenerator:
         new_script.extend(solution_blocks)
 
         # Add equilibrium phases, kinetic phases, and exchange blocks
-        new_script.extend(self.generate_equilibrium_phases_blocks())
-        new_script.extend(self.generate_kinetic_phases_blocks())
-        new_script.extend(self.generate_exchange_blocks())
+        sim_blocks = [key for key in self.config.keys() if key != 'reactive']
+        block_generators = {
+            "equilibrium_phases": self.generate_equilibrium_phases_blocks,
+            "kinetic_phases": self.generate_kinetic_phases_blocks,
+            "exchange_phases": self.generate_exchange_phases_blocks
+        }
+        for block in sim_blocks:
+            generator = block_generators.get(block)
+            if generator is not None:
+                new_script.extend(generator())
         new_script.extend(postfix_block)
         self.regenerated_script = ''.join(new_script).strip()
         return self.regenerated_script
@@ -242,7 +249,7 @@ class Regenerator:
         self.kinetic_phases_blocks = blocks
         return blocks
 
-    def generate_exchange_blocks(self):
+    def generate_exchange_phases_blocks(self):
         """
         Generate exchange blocks from the config.
         """

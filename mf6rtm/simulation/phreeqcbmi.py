@@ -3,10 +3,8 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import phreeqcrm
-
 from mf6rtm.utils import utils
 from mf6rtm.simulation.mf6api import Mf6API
-
 
 class PhreeqcBMI(phreeqcrm.BMIPhreeqcRM):
 

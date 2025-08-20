@@ -677,14 +677,16 @@ class Mup3d(object):
         """Save config toml file"""
         assert self.wd is not None, "Model directory not specified"
         config_path = self.wd / "mf6rtm.toml"
+        print(self.config)
         self.config.save_to_file(filepath=config_path)
         return config_path
 
     def write_simulation(self):
         """write phreqcrm simulation and configuration files"""
         self._write_phreeqc_init_file()
-        # self.write_internal_parameters()
-        # self.write_external_files_layered()
+        if self.config.reactive_externalio:
+            self.write_internal_parameters()
+            self.write_external_files_layered()
         self.save_config()
         print(f"Simulation saved in {self.wd}")
         return
@@ -817,9 +819,10 @@ class Mup3d(object):
                                                     }
                                     ):
         """Add non-external attributes to the config object."""
-
-        self.add_read_external_files_flag_to_config(flag=True)
-        for key in internals.keys():
+        valid_internals = {k: v for k, v in internals.items() if getattr(self, k, None) is not None}
+        # self.add_read_external_files_flag_to_config(flag=True)
+        for key in valid_internals.keys():
+            # if key is ot defined continue
             attr_list = internals[key]
             phase_obj = getattr(self, key)
             data = phase_obj.data[0]
@@ -843,15 +846,6 @@ class Mup3d(object):
                         
                         if not hasattr(self.config, attr_name):
                             self.config.add_new_configuration(**{attr_name: data[name][item]})
-
-
-    def add_read_external_files_flag_to_config(self, flag=True):
-        """Add a flag to the config object to indicate whether to read external files."""
-        if not hasattr(self.config, 'reactive_externalio'):
-            self.config.add_new_configuration(**{'reactive_externalio': flag})
-        else:
-            self.config.reactive_externalio = flag
-        return self.config.reactive_externalio
 
     def save_mup3d(self, filename='mup3d.pkl'):
         """
@@ -1006,7 +1000,7 @@ class Mup3d(object):
         return instance
 
     def write_external_files_layered(self,
-                                     phase_attrs = [
+                                     internals = [
                                                     "exchange_phases",
                                                     "equilibrium_phases",
                                                     "kinetic_phases"
@@ -1024,7 +1018,7 @@ class Mup3d(object):
 
         Parameters
         ----------
-        phase_attrs : list of str, optional
+        internals : list of str, optional
             List of model attributes containing geochemical phase data.
             Default is ["exchange_phases", "equilibrium_phases", "kinetic_phases"].
 
@@ -1032,7 +1026,8 @@ class Mup3d(object):
             List of property names to extract and write per species and layer.
             Default is ['m0'].
         """
-        for attr in phase_attrs:
+        valid_internals = [k for k in internals if getattr(self, k, None) is not None]
+        for attr in valid_internals:
             phase_obj = getattr(self, attr)
             if phase_obj is None:
                 print(f"Warning: model has no attribute '{attr}'. Skipping.")
@@ -1119,7 +1114,9 @@ class Mup3d(object):
     def run(self, reactive = None, nthread=1):
         '''Wrapper function to run the MF6RTM model'''
         with working_dir(self.wd):
-            return solve(self.wd, reactive=reactive, nthread=nthread)
+            print("Running mf6rtm", flush=True)
+            success = solve(self.wd, reactive=reactive, nthread=nthread)
+            return success
 
 @contextmanager
 def working_dir(path):

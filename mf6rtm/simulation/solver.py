@@ -1,24 +1,24 @@
 """The mf6rtm module provides the Mf6RTM class that couples modflowapi and
 phreeqcrm.
 """
+import os
+# import warnings
+import numpy as np
 
+from datetime import datetime
 from typing import Any, Union
 from pathlib import Path
-import os
-from os import PathLike
-import warnings
-from datetime import datetime
 
-warnings.filterwarnings("ignore")
-warnings.filterwarnings("ignore", category=DeprecationWarning)
 from PIL import Image
-import numpy as np
 from mf6rtm.simulation.mf6api import Mf6API
 from mf6rtm.simulation.phreeqcbmi import PhreeqcBMI
 from mf6rtm.simulation.discretization import total_cells_in_grid
 from mf6rtm.config.config import MF6RTMConfig
 from mf6rtm.io.externalio import SelectedOutput
 from mf6rtm.utils import utils
+
+# warnings.filterwarnings("ignore")
+# warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # global variables
 DT_FMT = "%Y-%m-%d %H:%M:%S"
@@ -32,7 +32,7 @@ time_units_dict = {
     "unknown": 1,  # if unknown assume seconds
 }
 
-def check_config_file(wd: PathLike) -> tuple[PathLike, PathLike]:
+def check_config_file(wd: os.PathLike) -> tuple[os.PathLike, os.PathLike]:
     assert os.path.exists(
         os.path.join(wd, "mf6rtm.toml")
         ), "mf6rtm.toml not found in model directory"
@@ -40,25 +40,25 @@ def check_config_file(wd: PathLike) -> tuple[PathLike, PathLike]:
     config = MF6RTMConfig.from_toml_file(config_file)
     return config
 
-def check_nam_files(wd: PathLike) -> tuple[PathLike, PathLike]:
+def check_nam_files(wd:os.PathLike) -> tuple[os.PathLike,os.PathLike]:
     """Check if the nam files are present in the model directory"""
     nam = [f for f in os.listdir(wd) if f.endswith(".nam")]
     assert "mfsim.nam" in nam, "mfsim.nam file not found in model directory"
     assert "gwf.nam" in nam, "gwf.nam file not found in model directory"
     return os.path.join(wd, "mfsim.nam"), os.path.join(wd, "gwf.nam")
 
-def prep_to_run(wd: PathLike) -> tuple[PathLike, PathLike]:
+def prep_to_run(wd:os.PathLike) -> tuple[os.PathLike,os.PathLike]:
     """
     Prepares the model to run by checking if the model directory (wd) contains the necessary files
     and returns the path to the yaml file (phreeqcrm) and the dll file (mf6 api)
 
     Parameters
     ----------
-    wd : PathLike
+    wd :os.PathLike
         The path to the working directory of model directory
     Returns
     -------
-    tuple[PathLike, PathLike]
+    tuple[PathLike,os.PathLike]
         The path to the phreeqcrm model file (yaml) and the path to the MODFLOW 6 dll (associated with mf6api).
     """
     # check if wd exists
@@ -86,7 +86,7 @@ def prep_to_run(wd: PathLike) -> tuple[PathLike, PathLike]:
     ), f"{yamlfile} not found in model directory {wd}"
     return yamlfile, dll
 
-def solve(wd: PathLike, reactive: Union[bool, None] = None, nthread: int = 1) -> bool:
+def solve(wd:os.PathLike, reactive: Union[bool, None] = None, nthread: int = 1) -> bool:
     """Wrapper to prepare and call solve functions"""
 
     mf6rtm = initialize_interfaces(wd, nthread=nthread)
@@ -103,7 +103,7 @@ def solve(wd: PathLike, reactive: Union[bool, None] = None, nthread: int = 1) ->
 
 
 # TODO: we should maybe move this into the Mf6API as an alternative constructor
-def initialize_interfaces(wd: PathLike, nthread: int = 1) -> Mf6API:
+def initialize_interfaces(wd:os.PathLike, nthread: int = 1) -> Mf6API:
     """Function to initialize the interfaces for modflowapi and phreeqcrm and returns the mf6rtm object"""
 
     yamlfile, dll = prep_to_run(wd)
@@ -119,7 +119,7 @@ def initialize_interfaces(wd: PathLike, nthread: int = 1) -> Mf6API:
     return mf6rtm
 
 
-def set_nthread_yaml(yamlfile: PathLike, nthread: int = 1) -> None:
+def set_nthread_yaml(yamlfile:os.PathLike, nthread: int = 1) -> None:
     """Function to set the number of threads in the yaml file"""
     with open(yamlfile, "r") as f:
         lines = f.readlines()
@@ -132,14 +132,14 @@ def set_nthread_yaml(yamlfile: PathLike, nthread: int = 1) -> None:
 
 
 class Mf6RTM(object):
-    def __init__(self, wd: PathLike, mf6api: Mf6API, phreeqcbmi: PhreeqcBMI) -> None:
+    def __init__(self, wd:os.PathLike, mf6api: Mf6API, phreeqcbmi: PhreeqcBMI) -> None:
         """
         Initialize the Mf6RTM instance with specified working directory, MF6API,
         and PhreeqcBMI instances.
 
         Parameters
         ----------
-        wd : PathLike
+        wd :os.PathLike
             The working directory path for the model.
         mf6api : Mf6API
             An instance of the Mf6API class, representing the Modflow 6 API.
@@ -154,7 +154,7 @@ class Mf6RTM(object):
             The PHREEQC BMI instance.
         charge_offset : float
             Offset for charge, initialized to 0.0.
-        wd : PathLike
+        wd :os.PathLike
             The working directory path.
         sout_fname : str
             Filename for the output, default is "sout.csv".

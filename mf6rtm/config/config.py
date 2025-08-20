@@ -42,6 +42,8 @@ class MF6RTMConfig:
         # Apply defaults for any missing attributes
         self._apply_defaults()
 
+        self._validate_reaction_timing()
+        self._validate_tsteps()
     def _apply_defaults(self):
         """Apply default values for any missing attributes."""
         defaults = {
@@ -55,9 +57,6 @@ class MF6RTMConfig:
         for key, default_value in defaults.items():
             if not hasattr(self, key):
                 setattr(self, key, default_value)
-        
-        self._validate_reaction_timing()
-        self._validate_tsteps()
 
     def add_new_configuration(self, **kwargs):
         """Add new configuration parameters dynamically."""
@@ -297,6 +296,13 @@ class MF6RTMConfig:
         kwargs.update(flattened)
         return cls(**kwargs)
 
+    # def add_read_external_files_flag_to_config(self, flag=False):
+    #     """Add a flag to the config object to indicate whether to read external files."""
+    #     if not hasattr(self.config, 'reactive_externalio'):
+    #         self.config.add_new_configuration(**{'reactive_externalio': flag})
+    #     else:
+    #         self.config.reactive_externalio = flag
+    #     return self.config.reactive_externalio
 
     @classmethod
     def from_toml_file(cls, filepath: str) -> 'MF6RTMConfig':
