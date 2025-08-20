@@ -12,14 +12,13 @@ from datetime import datetime
 warnings.filterwarnings("ignore")
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 from PIL import Image
-import pandas as pd
 import numpy as np
-from mf6rtm.mf6api import Mf6API
-from mf6rtm.phreeqcbmi import PhreeqcBMI
-from mf6rtm import utils
-from mf6rtm.discretization import total_cells_in_grid
-from mf6rtm.config import MF6RTMConfig
-from mf6rtm.externalio import SelectedOutput
+from mf6rtm.simulation.mf6api import Mf6API
+from mf6rtm.simulation.phreeqcbmi import PhreeqcBMI
+from mf6rtm.simulation.discretization import total_cells_in_grid
+from mf6rtm.config.config import MF6RTMConfig
+from mf6rtm.io.externalio import SelectedOutput
+from mf6rtm.utils import utils
 
 # global variables
 DT_FMT = "%Y-%m-%d %H:%M:%S"
@@ -72,7 +71,7 @@ def prep_to_run(wd: PathLike) -> tuple[PathLike, PathLike]:
     config = check_config_file(wd)
     check_nam_files(wd)
     if config.reactive['externalio']:
-        from mf6rtm.externalio import Regenerator
+        from mf6rtm.io.externalio import Regenerator
         print("WARNING: Flag for external IO mode is active")
         regcls = Regenerator.regenerate_from_external_files(wd=wd, 
                                                 phinpfile='phinp.dat',
@@ -590,11 +589,14 @@ def get_conc_change_mask(
 
 def mrbeaker() -> str:
     """ASCII art of Mr. Beaker"""
+
+    from mf6rtm.assets import mrbeaker_path
     # get the path of this file
     whereismrbeaker = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "mrbeaker.png"
     )
-    mr_beaker_image = Image.open(whereismrbeaker)
+
+    mr_beaker_image = Image.open(mrbeaker_path())
 
     # Resize the image to fit the terminal width
     terminal_width = 80  # Adjust this based on your terminal width

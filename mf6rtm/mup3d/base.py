@@ -1,4 +1,5 @@
-"""The mup3d module provides a wrapper for PHRREQC Inputs.
+"""
+Base module of the mup3d package
 """
 
 from pathlib import Path
@@ -10,8 +11,8 @@ from typing import Union
 import pandas as pd
 import numpy as np
 import phreeqcrm
-from mf6rtm.solver import solve, DT_FMT, time_units_dict
-from mf6rtm import utils
+from mf6rtm.simulation.solver import solve, DT_FMT, time_units_dict
+from mf6rtm.utils import utils
 from mf6rtm.config import MF6RTMConfig
 from phreeqcrm import yamlphreeqcrm
 
@@ -295,14 +296,15 @@ class Mup3d(object):
         if isinstance(self.solutions.ic, (int, float)):
             self.solutions.ic = np.reshape([self.solutions.ic]*self.nxyz, self.grid_shape)
             print(self.solutions.ic.shape, self.nxyz, self.grid_shape)
-        assert (self.solutions.ic.shape == self.grid_shape,
-            f'Initial conditions array must be an array of the shape ({self.grid_shape}) not {self.solutions.ic.shape}'
+        assert self.solutions.ic.shape == self.grid_shape, (
+            f'Initial conditions array must be an array of the shape ({self.grid_shape})'
+            f'not {self.solutions.ic.shape}'
         )
     def set_componenth2o(self, flag):
         '''Set the component H2O to be True or False.
         if False Total H and Total O are transported
         if True H2O, Excess H and Excess O are transported'''
-        assert(flag, (bool))
+        assert isinstance(flag, bool), f"flag must be a boolean, got {type(flag).__name__}"
         self.componenth2o = flag
         return self.componenth2o
 

@@ -1,11 +1,14 @@
+"""externalio to write outputs and to write and read phreeqcrm
+inputs from layered txt files.
+"""
 import os
 import numpy as np
 import pandas as pd
-from mf6rtm.config import MF6RTMConfig
-from mf6rtm.mf6api import Mf6API
-from mf6rtm.discretization import grid_dimensions, total_cells_in_grid
-from mf6rtm.yaml_reader import load_yaml_to_phreeqcrm
-from mf6rtm.utils import get_indices
+from mf6rtm.simulation.mf6api import Mf6API
+from mf6rtm.simulation.discretization import grid_dimensions, total_cells_in_grid
+from mf6rtm.config.yaml_reader import load_yaml_to_phreeqcrm
+from mf6rtm.config.config import MF6RTMConfig
+from mf6rtm.utils.utils import get_indices
 
 ic_position = {
     'equilibrium_phases': 1, 

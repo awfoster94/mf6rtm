@@ -2,7 +2,7 @@
 This module contains the Discretization functions for various ModFlow grid types.
 """
 
-from mf6rtm.mf6api import Mf6API
+from mf6rtm.simulation.mf6api import Mf6API
 import math
 
 
