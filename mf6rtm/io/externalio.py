@@ -11,8 +11,8 @@ from mf6rtm.config.config import MF6RTMConfig
 from mf6rtm.utils.utils import get_indices
 
 ic_position = {
-    'equilibrium_phases': 1, 
-    'exchange_phases': 2, 
+    'equilibrium_phases': 1,
+    'exchange_phases': 2,
     'surface_phases': 3,
     'gas_phases': 4,
     'solid_solution_phases': 5,
@@ -23,7 +23,7 @@ class Regenerator:
     """
     A class to regenerate a Mup3d object from a script file.
     """
-    def __init__(self, wd='.', phinp='phinp.dat', 
+    def __init__(self, wd='.', phinp='phinp.dat',
                  yamlfile='mf6rtm.yaml', dllfile='libmf6.dll'):
         """
         Initialize the Regenerator with the working directory and phinp file.
@@ -44,8 +44,8 @@ class Regenerator:
         # self.validate_external_files()
 
     @classmethod
-    def regenerate_from_external_files(cls, wd='.', 
-                                       phinpfile='phinp.dat', 
+    def regenerate_from_external_files(cls, wd='.',
+                                       phinpfile='phinp.dat',
                                        yamlfile='mf6rtm.yaml',
                                        dllfile='libmf6.dll',
                                        prefix='_'):
@@ -53,8 +53,8 @@ class Regenerator:
         Class method to execute the regeneration process.
         """
         instance = cls(
-            wd=wd, 
-            phinp=phinpfile, 
+            wd=wd,
+            phinp=phinpfile,
             yamlfile=yamlfile,
             dllfile=dllfile
 
@@ -70,10 +70,10 @@ class Regenerator:
         phinp_path = os.path.join(self.wd, self.phinp)
         if not os.path.exists(phinp_path):
             raise FileNotFoundError(f"Required file '{self.phinp}' not found in working directory '{self.wd}'.")
-        
+
         for key, value in self.config.items():
             if key != 'reactive':
-                names = self.config[key]['names'] if 'names' in self.config[key] else ValueError(f"Key '{key}' does not have 'names' attribute.") 
+                names = self.config[key]['names'] if 'names' in self.config[key] else ValueError(f"Key '{key}' does not have 'names' attribute.")
                 for nme in names:
                     for lay in range(self.nlay):
                         file_path = os.path.join(self.wd, f"{key}.{nme}.m0.layer{lay+1}.txt")
@@ -84,7 +84,7 @@ class Regenerator:
         with open(os.path.join(self.wd, self.phinp), 'r') as f:
             script = f.readlines()
         return script
-    
+
     def get_solution_blocks(self, script):
         """
         Extract solution blocks from the script.
@@ -98,13 +98,11 @@ class Regenerator:
                 in_postfix = True
             if in_postfix:
                 block.append(line)
-
         # set new attibute named self.solution_blocks
         self.solution_blocks = block
         return block
 
     def update_yaml(self, filename='_mf6rtm.yaml'):
-
         """Update the YAML file with the regenerated script and initial conditions.
         """
         yamlphreeqcrm, ic1 = load_yaml_to_phreeqcrm(self.yamlfile)
@@ -155,7 +153,7 @@ class Regenerator:
         self.postfix_blocks = postfix_block
         # + ''.join(postfix_block).strip()
         return postfix_block
-    
+
     def generate_new_script(self):
         """
         Generate a new script based on the existing script and configuration.
@@ -230,16 +228,13 @@ class Regenerator:
                 # Get parameters for this kinetic phase
                 parms = kinetic_phases.get('parms', {}).get(nme, [])
                 m0 = kinetic_phases.get('m0', {}).get(nme, None).flatten()
-                
                 # Start the kinetic phase line with name and initial moles
                 block += f"    {nme}\n"
                 block += f"        -m0 {m0[i_phase-1]:.5e}\n"
-                
                 # Add parameters if they exist
                 if parms:
                     parms_str = " ".join([f"{p:.5e}" for p in parms])
                     block += f"        -parms {parms_str}\n"
-                
                 # Add formula if it exists
                 formula = kinetic_phases.get('formula', {}).get(nme, None)
                 if formula:
@@ -276,7 +271,6 @@ class Regenerator:
         Returns a dictionary with the loaded arrays organized by key, name, and layer.
         """
         file_data = {}
-        
         # Read phase files following the same logic as validate_external_files
         for key, value in self.config.items():
             if key != 'reactive':
@@ -285,14 +279,14 @@ class Regenerator:
                     continue
                 names = self.config[key]['names']
                 file_data[key] = {}
-                
+
                 for nme in names:
                     layer_arrays = []
-                    
+
                     # Load all layers for this name
                     for lay in range(self.nlay):
                         file_path = os.path.join(self.wd, f"{key}.{nme}.m0.layer{lay+1}.txt")
-                        
+
                         if os.path.exists(file_path):
                             try:
                                 # Load the array using numpy
@@ -304,7 +298,7 @@ class Regenerator:
                         else:
                             print(f"Warning: File {file_path} does not exist")
                             layer_arrays.append(None)
-                    
+
                     # Merge layers and reshape using grid dimensions
                     if any(arr is not None for arr in layer_arrays):
                         try:
@@ -313,11 +307,11 @@ class Regenerator:
                             if valid_arrays:
                                 # Stack arrays along the first axis (layers)
                                 merged_array = np.stack(valid_arrays, axis=0)
-                                
+
                                 # Reshape to grid dimensions
                                 nlay, nrow, ncol = self.grid_shape
                                 reshaped_array = merged_array.reshape(nlay, nrow, ncol)
-                                
+
                                 file_data[key][nme] = reshaped_array
                             else:
                                 file_data[key][nme] = None
@@ -328,7 +322,7 @@ class Regenerator:
                     else:
                         file_data[key][nme] = None
                         print(f"Warning: No arrays loaded for {nme}")
-        
+
         # Store the loaded data as an instance attribute
         self.file_data = file_data
         return file_data
@@ -340,17 +334,17 @@ class Regenerator:
         """
         if not hasattr(self, 'file_data'):
             self.read_external_files()
-        
+
         # Add phase array data to config
         for key in self.file_data:
             if key != 'phinp' and key in self.config:
                 # Add arrays section to each phase type
                 if 'm0' not in self.config[key]:
                     self.config[key]['m0'] = {}
-                
+
                 self.config[key]['m0'] = self.file_data[key]
                 # print(f"Added m0 data for {key} to config")
-        
+
         return self.config
 
 class SelectedOutput:
@@ -363,7 +357,7 @@ class SelectedOutput:
 
     def write_inner_arrays(self, conc_array, fname='_mf6tophr.csv'):
         """Export inner coupling arrays"""
-        arr = np.reshape(np.array(conc_array), 
+        arr = np.reshape(np.array(conc_array),
                          (self.phreeqcbmi.ncomps, self.mf6rtm.nxyz)).T
         time_row = np.full((arr.shape[0], 1), self.mf6rtm.ctime)
         cellid_row = np.arange(self.mf6rtm.nxyz).reshape(-1, 1)

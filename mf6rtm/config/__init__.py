@@ -1,6 +1,6 @@
 """
-Configuration module that holds recipes to write a toml file and 
-also adds functionality to read and re write the PHREEQCRM yaml 
+Configuration module that holds recipes to write a toml file and
+also adds functionality to read and re write the PHREEQCRM yaml
 file
 """
 

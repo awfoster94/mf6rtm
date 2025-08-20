@@ -39,27 +39,27 @@ except ImportError:
         def YAMLRunCells(self): pass
         def YAMLSetTime(self, time): pass
         def WriteYAMLDoc(self, filename): pass
-    
+
     yamlphreeqcrm = type('module', (), {'YAMLPhreeqcRM': YAMLPhreeqcRM})()
 
 def load_yaml_to_phreeqcrm(yaml_file_path):
     """
     Load a YAML file and reconstruct a YAMLPhreeqcRM instance.
-    
+
     Args:
         yaml_file_path (str): Path to the YAML file
-        
+
     Returns:
         YAMLPhreeqcRM: Reconstructed instance
     """
-    
+
     # Read the YAML file
     with open(yaml_file_path, 'r') as file:
         yaml_data = yaml.safe_load(file)
-    
+
     # Create a new YAMLPhreeqcRM instance
     yrm = yamlphreeqcrm.YAMLPhreeqcRM()
-    
+
     # Method mapping dictionary
     method_mapping = {
         'SetGridCellCount': lambda item: yrm.YAMLSetGridCellCount(item['count']),
@@ -114,11 +114,7 @@ def load_yaml_to_phreeqcrm(yaml_file_path):
                 # print(f"✓ Processed: {key}")
             except Exception as e:
                 print(f"Error processing {key}: {e}")
-
-
         else:
             print(f"Unknown key: {key}")
-    
+
     return yrm, ic1
-
-

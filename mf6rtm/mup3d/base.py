@@ -419,7 +419,6 @@ class Mup3d(object):
                 print(f"Couldn't find the database in '{database}' or '{alt_path}'")
 
         # get absolute path of the database
-        
         self.database = database
 
     def set_postfix(self, postfix):
@@ -826,7 +825,7 @@ class Mup3d(object):
             attr_list = internals[key]
             phase_obj = getattr(self, key)
             data = phase_obj.data[0]
-            
+
             for item in attr_list:
                 if item == "dummy":
                     attr_name = f"{key}_names"
@@ -842,18 +841,16 @@ class Mup3d(object):
                     if item in data[name]:
                         # Create nested attribute name: equilibrium_phases_si_Goethite
                         attr_name = f"{key}_{item}_{name}"
-                        # print(f"Adding {attr_name} to config")
-                        
                         if not hasattr(self.config, attr_name):
                             self.config.add_new_configuration(**{attr_name: data[name][item]})
 
     def save_mup3d(self, filename='mup3d.pkl'):
         """
         Save the Mup3d object to a pickle file.
-        
+
         This method saves all non-private, non-callable attributes of the Mup3d object
         to a pickle file for later restoration using load_mup3d().
-        
+
         Parameters
         ----------
         filename : str, optional
@@ -861,26 +858,25 @@ class Mup3d(object):
         """
         import pickle
         fname = os.path.join(self.wd, filename)
-        
+
         # Attributes that cannot be pickled (SWIG objects, etc.)
         unpickleable_attrs = {
             'phreeqc_rm',           # SWIG PhreeqcRM object
             'phreeqcrm_yaml',       # SWIG YAMLPhreeqcRM object
         }
-        
+
         # Create a dictionary of the object's attributes
         # Exclude private attributes, callable methods, and unpickleable objects
         attributes = {}
         skipped_attrs = []
-        
+
         for attr in dir(self):
             if attr.startswith('_') or callable(getattr(self, attr)):
                 continue
-                
             if attr in unpickleable_attrs:
                 skipped_attrs.append(attr)
                 continue
-                
+
             try:
                 value = getattr(self, attr)
                 # Test if the attribute can be pickled
@@ -894,7 +890,6 @@ class Mup3d(object):
         # Save the object to a file
         with open(fname, "wb") as file:
             pickle.dump(attributes, file)
-            
         print(f"Saved Mup3d model to {fname}")
         if skipped_attrs:
             print(f"Skipped unpickleable attributes: {skipped_attrs}")
@@ -903,21 +898,20 @@ class Mup3d(object):
     def load_mup3d(cls, filename='mup3d.pkl', wd='.'):
         """
         Load a Mup3d object from a pickle file (class method).
-        
         This creates a new Mup3d instance from a saved pickle file.
-        
+
         Parameters
         ----------
         filename : str, optional
             Name of the pickle file. Default is 'mup3d.pkl'.
         working_dir : str, optional
             Directory containing the pickle file. Default is current directory.
-            
+
         Returns
         -------
         Mup3d
             A new Mup3d instance loaded from the pickle file.
-            
+
         Examples
         --------
         >>> # Create a new model from pickle file
@@ -925,7 +919,7 @@ class Mup3d(object):
         """
         import pickle
         fname = os.path.join(wd, filename)
-        
+
         # Load the object from a file
         with open(fname, "rb") as file:
             attributes = pickle.load(file)
@@ -940,28 +934,28 @@ class Mup3d(object):
             ncpl=attributes.get('ncpl', None),
             nxyz=attributes.get('nxyz', None)
         )
-        
+
         # Set the working directory if it exists
         if attributes.get('wd') is not None:
             instance.set_wd(attributes.get('wd'))
-            
+
         # Set the database if it exists
         if attributes.get('database') is not None and os.path.exists(attributes.get('database')):
             instance.set_database(attributes.get('database'))
-            
+
         # Set the postfix if it exists
         if attributes.get('postfix') is not None and os.path.exists(attributes.get('postfix')):
             instance.set_postfix(attributes.get('postfix'))
-            
+
         # Set the componenth2o flag
         instance.set_componenth2o(attributes.get('componenth2o', False))
-        
+
         # Set the initial temperature
         instance.set_initial_temp(attributes.get('init_temp', 25.0))
-        
+
         # Set the charge offset
         instance.set_charge_offset(attributes.get('charge_offset', 0.0))
-        
+
         # Set the config object if it exists
         if 'config' in attributes and attributes['config'] is not None:
             if hasattr(attributes['config'], 'to_dict'):
@@ -971,7 +965,7 @@ class Mup3d(object):
             elif isinstance(attributes['config'], dict):
                 # If config is already a dictionary
                 instance.set_config(**attributes['config'])
-        
+
         # Set the phases using the appropriate setter methods
         phase_types = ['equilibrium_phases', 'kinetic_phases', 'exchange_phases', 'surfaces_phases']
         for phase_type in phase_types:
@@ -983,15 +977,15 @@ class Mup3d(object):
                 else:
                     # For kinetic_phases and surfaces_phases, use set_phases
                     instance.set_phases(attributes[phase_type])
-        
+
         # Set remaining attributes that don't have specific setter methods
         skip_attrs = {
-            'name', 'solutions', 'nlay', 'nrow', 'ncol', 'ncpl', 'nxyz', 
-            'wd', 'database', 'postfix', 'componenth2o', 'init_temp', 
-            'charge_offset', 'config', 'equilibrium_phases', 'kinetic_phases', 
+            'name', 'solutions', 'nlay', 'nrow', 'ncol', 'ncpl', 'nxyz',
+            'wd', 'database', 'postfix', 'componenth2o', 'init_temp',
+            'charge_offset', 'config', 'equilibrium_phases', 'kinetic_phases',
             'exchange_phases', 'surfaces_phases'
         }
-        
+
         for attr, value in attributes.items():
             if attr not in skip_attrs and not callable(value):
                 setattr(instance, attr, value)

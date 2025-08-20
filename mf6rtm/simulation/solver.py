@@ -73,7 +73,7 @@ def prep_to_run(wd:os.PathLike) -> tuple[os.PathLike,os.PathLike]:
     if config.reactive['externalio']:
         from mf6rtm.io.externalio import Regenerator
         print("WARNING: Flag for external IO mode is active")
-        regcls = Regenerator.regenerate_from_external_files(wd=wd, 
+        regcls = Regenerator.regenerate_from_external_files(wd=wd,
                                                 phinpfile='phinp.dat',
                                                 yamlfile='mf6rtm.yaml',
                                                 dllfile=dll
@@ -381,7 +381,7 @@ class Mf6RTM(object):
                     f"{gwt_model_name.upper()}/X",
                     utils.concentration_l_to_m3(conc_dict[c]),
                 )
-        self.selected_output.write_inner_arrays(c_dbl_vect, 
+        self.selected_output.write_inner_arrays(c_dbl_vect,
                                                 fname='_phr_to_mf6.csv')
         return c_dbl_vect
 
@@ -442,7 +442,7 @@ class Mf6RTM(object):
                     )
                 )
         c_dbl_vect = np.reshape(mf6_conc_array, self.nxyz * self.phreeqcbmi.ncomps)
-        self.selected_output.write_inner_arrays(c_dbl_vect, 
+        self.selected_output.write_inner_arrays(c_dbl_vect,
                                                 fname='_mf6_to_phr.csv')
         self.phreeqcbmi.SetConcentrations(c_dbl_vect)
 

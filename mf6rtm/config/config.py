@@ -52,7 +52,7 @@ class MF6RTMConfig:
             'reactive_tsteps': [],
             'reactive_externalio': False,
         }
-        
+
         # Apply defaults for any missing attributes
         for key, default_value in defaults.items():
             if not hasattr(self, key):
@@ -64,7 +64,7 @@ class MF6RTMConfig:
             setattr(self, key, value)
         # Update internal schema if needed
         self._update_schema_for_new_attrs(kwargs.keys())
-    
+
     def _validate_reaction_timing(self):
         """Validate reaction_timing parameter."""
         valid_options = ['all', 'user', 'adaptive']
@@ -158,18 +158,15 @@ class MF6RTMConfig:
                 continue
             if attr_name.startswith(prefix):
                 key = attr_name[len(prefix):]  # strip the prefix
-                reactive_group[key] = value       
-            
+                reactive_group[key] = value
             # Handle nested phase attributes
             if '_' in attr_name:
                 parts = attr_name.split('_')
-                
                 if len(parts) >= 3 and parts[0] in ['equilibrium', 'kinetic', 'exchange'] and parts[-1] not in ['names']:
                     # Reconstruct the main group name
                     main_group = '_'.join(parts[:2])  # e.g., "equilibrium_phases"
                     sub_group = parts[2]  # e.g., "si" or "parms"
                     key = '_'.join(parts[3:]) if len(parts) > 3 else parts[2]  # mineral name
-                    
                     if main_group not in result:
                         result[main_group] = {}
                     if sub_group not in result[main_group]:
@@ -177,31 +174,26 @@ class MF6RTMConfig:
                     result[main_group][sub_group][key] = value
                 elif len(parts) >= 2 and parts[-1] in ['names']:
                     main_group = '_'.join(parts[:-1])  # e.g., "kinetic_phases"
-                    
                     if main_group not in result:
                         result[main_group] = {}
                     # Create the nested structure that TOML will render as [kinetic_phases.names]
                     result[main_group]['names'] = value
             else:
                 result[attr_name] = value
-        
         if reactive_group:
             result['reactive'] = reactive_group
-        
         sorted_result = {}
-        
         # Add 'reactive' first if it exists
         if 'reactive' in result:
             sorted_result['reactive'] = result['reactive']
-        
         # Group keys by phase type and sort within groups
         phase_groups = {}
         other_keys = []
-        
+
         for key in result.keys():
             if key == 'reactive':
                 continue
-            # Extract the main phase type (e.g., 'equilibrium_phases', 'kinetic_phases')
+            # Extract the main phase type ('equilibrium_phases', 'kinetic_phases')
             if '.' in key:
                 main_phase = key.split('.')[0]
             else:
@@ -220,15 +212,15 @@ class MF6RTMConfig:
             phase_keys = phase_groups[phase_type]
             main_key = phase_type  # e.g., 'equilibrium_phases'
             sub_keys = [k for k in phase_keys if k != main_key]
-            
+
             # Add main section first if it exists
             if main_key in phase_keys:
                 sorted_result[main_key] = result[main_key]
-            
+
             # Add subsections in alphabetical order
             for sub_key in sorted(sub_keys):
                 sorted_result[sub_key] = result[sub_key]
-        
+
         # Add any remaining keys alphabetically
         for key in sorted(other_keys):
             sorted_result[key] = result[key]
@@ -238,16 +230,15 @@ class MF6RTMConfig:
         """Update configuration schema for new attributes."""
         if not hasattr(self, '_config_schema'):
             self._config_schema = {}
-        
         for attr_name in attr_names:
             if attr_name not in self._config_schema:
                 # Auto-detect group based on naming convention
                 parts = attr_name.split('_')
-                
+
                 if len(parts) >= 2 and parts[0] in ['equilibrium', 'kinetic']:
                     main_group = '_'.join(parts[:2])  # equilibrium_phases
                     sub_group = parts[2] if len(parts) > 2 else 'default'
-                    
+
                     # Store the nested structure info
                     self._config_schema[attr_name] = {
                         'main_group': main_group,
@@ -287,7 +278,7 @@ class MF6RTMConfig:
         # Flatten everything *except* 'reactive'
         remaining_dict = {k: v for k, v in config_dict.items() if k != 'reactive'}
         flattened = flatten_dict(remaining_dict)
-        
+
         # Important: remove any reactive_* keys that may be left from TOML
         for k in list(flattened.keys()):
             if k.startswith("reactive_"):
@@ -295,14 +286,6 @@ class MF6RTMConfig:
 
         kwargs.update(flattened)
         return cls(**kwargs)
-
-    # def add_read_external_files_flag_to_config(self, flag=False):
-    #     """Add a flag to the config object to indicate whether to read external files."""
-    #     if not hasattr(self.config, 'reactive_externalio'):
-    #         self.config.add_new_configuration(**{'reactive_externalio': flag})
-    #     else:
-    #         self.config.reactive_externalio = flag
-    #     return self.config.reactive_externalio
 
     @classmethod
     def from_toml_file(cls, filepath: str) -> 'MF6RTMConfig':
@@ -348,7 +331,7 @@ class MF6RTMConfig:
         """String representation of the configuration."""
         # Get all instance attributes (excluding private/protected ones)
         attrs = {k: v for k, v in self.__dict__.items() if not k.startswith('_')}
-        
+
         # Format each attribute as key=value
         attr_strs = []
         for key, value in attrs.items():
@@ -356,7 +339,7 @@ class MF6RTMConfig:
                 attr_strs.append(f"{key}='{value}'")
             else:
                 attr_strs.append(f"{key}={value}")
-        
+
         return f"{self.__class__.__name__}({', '.join(attr_strs)})"
 
     def __str__(self):
