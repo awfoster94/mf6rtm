@@ -5,11 +5,9 @@ on:
   #   - cron: '0 8 * * *' # run at 8 AM UTC (12 am PST)
   push:
     branches:
-      # - main
       - develop
-      # - 'release*'
   pull_request:
-    branches: [main, develop, feat_userdefinedreactioncall]
+    branches: [main, develop, coveralls]
 
 jobs:
   test:
