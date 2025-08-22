@@ -5,9 +5,11 @@ on:
   #   - cron: '0 8 * * *' # run at 8 AM UTC (12 am PST)
   push:
     branches:
+      # - main
       - develop
+      # - 'release*'
   pull_request:
-    branches: [main, develop, coveralls]
+    branches: [main, develop, feat_userdefinedreactioncall]
 
 jobs:
   test:
@@ -43,5 +45,3 @@ jobs:
         pip install tox tox-gh-actions
     - name: Test with tox
       run: tox
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
