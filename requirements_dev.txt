@@ -9,3 +9,4 @@ nbconvert == 7.16.4
 ipykernel == 6.29.4
 toml
 coverage
+coveralls
