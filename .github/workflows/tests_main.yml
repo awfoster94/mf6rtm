@@ -28,6 +28,6 @@ jobs:
         python -m pip install --upgrade pip
         pip install tox tox-gh-actions
     - name: Test with tox
-      run: tox -e testenv
+      run: tox -e py310,py311,py312,py313
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
