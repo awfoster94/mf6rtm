@@ -27,7 +27,5 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install tox tox-gh-actions
-    - name: Test and lint
-      run: tox -e py310,py311,py312,py313,flake8,coveralls
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Test with tox
+      run: tox
