@@ -355,16 +355,17 @@ class SelectedOutput:
         self.sout_fname = "sout.csv"
         self.get_selected_output_on = True
 
-    def write_ml_feature_arrays(self, conc_array, add_var_names=None,
-                                fname="_features.csv") -> None:
+    def write_ml_arrays(self, conc_array, iter,
+                        add_var_names=None,
+                        fname="_features.csv") -> None:
         """
         Write total transported component concentrations in mol/L
-        (+ optional vars in mol/L) to CSV for Machine Learning features.
+        (+ optional vars in mol/L) to CSV for Machine Learning arrays.
 
         Parameters
         ----------
         conc_array : array-like
-            Main concentrations (ncomps × nxyz).
+            Main concentrations (ncomps x nxyz).
         add_var_names : list of str, optional
             Extra PHREEQC variables to include.
         fname : str
@@ -393,7 +394,10 @@ class SelectedOutput:
         fmt = ["%.6f", "%d"] + ["%.10e"] * (arr.shape[1] - 2)
         fname = os.path.join(self.mf6rtm.wd, fname)
 
-        if self.mf6rtm.ctime == 0:
+        # flag for writing headers
+        write_header = False
+        if iter == 0:
+            write_header = True
             try:
                 os.remove(fname)
             except FileNotFoundError:
@@ -401,7 +405,7 @@ class SelectedOutput:
 
         with open(fname, "a") as f:
             np.savetxt(f, arr, delimiter=",",
-                    header=header_str if self.mf6rtm.ctime == 0 else "",
+                    header=header_str if write_header else "",
                     comments="", fmt=fmt)
 
     def _update_selected_output(self) -> None:
@@ -430,10 +434,7 @@ class SelectedOutput:
         self.phreeqcbmi.set_scalar("NthSelectedOutput", 0)
         sout = self.phreeqcbmi.GetSelectedOutput()
         sout = sout.reshape(-1, self.mf6rtm.nxyz)
-        print(sout.shape)
-        # print(type(sout))
-        # sout = [sout[i : i + self.mf6rtm.nxyz] for i in range(0, len(sout), self.mf6rtm.nxyz)]
-        # sout = np.array(sout)
+
         if self.mf6rtm._check_inactive_cells_exist(self.mf6rtm.diffmask) and hasattr(self, "_sout_k"):
             sout = self.__replace_inactive_cells_in_sout(sout, self.mf6rtm.diffmask)
         self._sout_k = sout  # save sout to a private attribute
