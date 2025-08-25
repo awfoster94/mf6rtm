@@ -181,12 +181,9 @@ class Mf6RTM(object):
         self.phreeqcbmi = phreeqcbmi
         self.charge_offset = 0.0
         self.wd = Path(wd)
-        # self.sout_fname = "sout.csv"
         self.epsaqu = 0.0
         self.fixed_components = None
         self.selected_output = SelectedOutput(self)
-
-        # self.get_selected_output_on = True
 
         # set component model dictionary
         self.component_model_dict = self._create_component_model_dict()
@@ -381,8 +378,8 @@ class Mf6RTM(object):
                     f"{gwt_model_name.upper()}/X",
                     utils.concentration_l_to_m3(conc_dict[c]),
                 )
-        self.selected_output.write_inner_arrays(c_dbl_vect,
-                                                fname='_phr_to_mf6.csv')
+        # self.selected_output.write_inner_arrays(c_dbl_vect,
+        #                                         fname='_phr_to_mf6.csv')
         return c_dbl_vect
 
     def _check_previous_conc_exists(self) -> bool:
@@ -442,8 +439,14 @@ class Mf6RTM(object):
                     )
                 )
         c_dbl_vect = np.reshape(mf6_conc_array, self.nxyz * self.phreeqcbmi.ncomps)
-        self.selected_output.write_inner_arrays(c_dbl_vect,
-                                                fname='_mf6_to_phr.csv')
+        self.selected_output.write_ml_feature_arrays(c_dbl_vect,
+                                        add_var_names=['Orgc','O0','tic','C_4',
+                                        'Fe2','Fe3','N3','NO3','S_2','SO4','Amm',
+                                        'N0','pH',
+                                        'pe','EQUI_Ferrihydrite','EQUI_Orgmatter',
+                                        'MOL_CaX2','MOL_FeX2','MOL_KX','MOL_MgX2',
+                                        'MOL_NaX','KIN_Pyrite'],
+                                        fname='_features.csv')
         self.phreeqcbmi.SetConcentrations(c_dbl_vect)
 
         # set the kper and kstp
@@ -520,14 +523,15 @@ class Mf6RTM(object):
                 # solve reactions
                 self.phreeqcbmi._solve_phreeqcrm(dt, diffmask=self.diffmask)
                 c_dbl_vect = self._transfer_array_to_mf6()
-                if self.selected_output.get_selected_output_on:
-                    # get sout and update df
-                    self.selected_output._update_selected_output()
-                    # append current sout rows to file
-                    self.selected_output._append_to_soutdf_file()
+
                 self._set_conc_at_previous_kstep(c_dbl_vect)
 
             self.mf6api.finalize_time_step()
+            if self.selected_output.get_selected_output_on:
+                # get sout and update df
+                self.selected_output._update_selected_output()
+                # append current sout rows to file
+                self.selected_output._append_to_soutdf_file()
             ctime = self._set_ctime()  # update the current time tracking
         sim_end = datetime.now()
         td = (sim_end - sim_start).total_seconds() / 60.0

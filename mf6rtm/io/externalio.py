@@ -355,38 +355,54 @@ class SelectedOutput:
         self.sout_fname = "sout.csv"
         self.get_selected_output_on = True
 
-    def write_inner_arrays(self, conc_array, fname='_mf6tophr.csv'):
-        """Export inner coupling arrays"""
-        arr = np.reshape(np.array(conc_array),
-                         (self.phreeqcbmi.ncomps, self.mf6rtm.nxyz)).T
-        time_row = np.full((arr.shape[0], 1), self.mf6rtm.ctime)
-        cellid_row = np.arange(self.mf6rtm.nxyz).reshape(-1, 1)
-        arr = np.hstack([time_row,cellid_row, arr])
-        fmt = ["%d", "%d"] + ['%.10e'] * (arr.shape[1]-2)
+    def write_ml_feature_arrays(self, conc_array, add_var_names=None,
+                                fname="_features.csv") -> None:
+        """
+        Write total transported component concentrations in mol/L
+        (+ optional vars in mol/L) to CSV for Machine Learning features.
 
-        header_str = "time,cell,"+",".join(self.phreeqcbmi.components)
+        Parameters
+        ----------
+        conc_array : array-like
+            Main concentrations (ncomps × nxyz).
+        add_var_names : list of str, optional
+            Extra PHREEQC variables to include.
+        fname : str
+            Output filename (relative to model wd).
+        """
+        # Base arrays and labels
+        cols = ["time", "cell", "saturation"] + list(self.phreeqcbmi.components)
+        arrays = [
+            np.full((self.mf6rtm.nxyz, 1), self.mf6rtm.ctime),
+            np.arange(self.mf6rtm.nxyz).reshape(-1, 1),
+            self.mf6rtm.get_saturation_from_mf6().reshape(-1, 1),
+            np.reshape(conc_array, (self.phreeqcbmi.ncomps, self.mf6rtm.nxyz)).T
+        ]
+
+        # Optional PHREEQC selected outputs
+        if add_var_names:
+            col_idx = [self.phreeqcbmi.soutdf.columns.get_loc(c) for c in add_var_names]
+            sout = self.phreeqcbmi.GetSelectedOutput().reshape(-1, self.mf6rtm.nxyz)
+            arrays.append(sout[col_idx, :].T)
+            cols.extend(add_var_names)
+
+        arr = np.hstack(arrays)
+        header_str = ",".join(cols)
+
+        # Write
+        fmt = ["%.6f", "%d"] + ["%.10e"] * (arr.shape[1] - 2)
+        fname = os.path.join(self.mf6rtm.wd, fname)
 
         if self.mf6rtm.ctime == 0:
             try:
-                os.remove(os.path.join(self.mf6rtm.wd, fname))
-            except:
+                os.remove(fname)
+            except FileNotFoundError:
                 pass
-            with open(fname, "a") as f:
-                np.savetxt(f,
-                            arr,
-                            delimiter=',',
-                            header=header_str,
-                            comments="",
-                            fmt=fmt
-                        )
-        else:
-            with open(fname, "a") as f:
-                np.savetxt(f,
-                            arr,
-                            delimiter=',',
-                            comments="",
-                            fmt=fmt
-                        )
+
+        with open(fname, "a") as f:
+            np.savetxt(f, arr, delimiter=",",
+                    header=header_str if self.mf6rtm.ctime == 0 else "",
+                    comments="", fmt=fmt)
 
     def _update_selected_output(self) -> None:
         """Update the selected output dataframe and save to attribute"""
@@ -413,10 +429,12 @@ class SelectedOutput:
         # selected ouput
         self.phreeqcbmi.set_scalar("NthSelectedOutput", 0)
         sout = self.phreeqcbmi.GetSelectedOutput()
-        sout = [sout[i : i + self.mf6rtm.nxyz] for i in range(0, len(sout), self.mf6rtm.nxyz)]
-        sout = np.array(sout)
+        sout = sout.reshape(-1, self.mf6rtm.nxyz)
+        print(sout.shape)
+        # print(type(sout))
+        # sout = [sout[i : i + self.mf6rtm.nxyz] for i in range(0, len(sout), self.mf6rtm.nxyz)]
+        # sout = np.array(sout)
         if self.mf6rtm._check_inactive_cells_exist(self.mf6rtm.diffmask) and hasattr(self, "_sout_k"):
-
             sout = self.__replace_inactive_cells_in_sout(sout, self.mf6rtm.diffmask)
         self._sout_k = sout  # save sout to a private attribute
         # add time to selected ouput
