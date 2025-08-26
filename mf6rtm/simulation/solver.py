@@ -183,7 +183,6 @@ class Mf6RTM(object):
         self.epsaqu = 0.0
         self.fixed_components = None
         self.selected_output = SelectedOutput(self)
-        # self.emulator_training = True
 
         # set component model dictionary
         self.component_model_dict = self._create_component_model_dict()
@@ -196,15 +195,55 @@ class Mf6RTM(object):
         self.config = MF6RTMConfig.from_toml_file(self.wd/"mf6rtm.toml")
         self.reactive = self.config.reactive_enabled
         
-        self.set_emulator_training_flag()
+        self.set_emulator_training()
 
-    def set_emulator_training_flag(self):
-        try:
-            self.ml_output = self.config.emulator_training_data
-        except:
-            self.ml_output = False
+    def set_emulator_training(self) -> None:
+        """
+        Configure emulator training output.
+
+        Reads ``emulator_training_data`` from the configuration. If enabled,
+        sets up emulator output variables; otherwise disables training data.
+
+        Attributes
+        ----------
+        ml_output : bool
+            Whether emulator training data output is enabled.
+
+        Returns
+        -------
+        None
+        """
+        self.ml_output = bool(getattr(self.config, "emulator_training_data", False))
+
         if self.ml_output:
+            self.set_emulator_output_add_variables()
             print("Saving emulator training data for surrogating")
+
+
+    def set_emulator_output_add_variables(self) -> None:
+        """
+        Add emulator target and feature variables to the output.
+
+        Updates ``selected_output`` with variables defined in the configuration.
+        Defaults to empty lists if not provided.
+
+        Attributes
+        ----------
+        selected_output.target_var : list of str
+            Target variables for emulator training.
+        selected_output.feat_var : list of str
+            Feature variables for emulator training.
+
+        Returns
+        -------
+        None
+        """
+        self.selected_output.target_var = getattr(
+            self.config, "emulator_target_variables", []
+        )
+        self.selected_output.feat_var = getattr(
+            self.config, "emulator_feature_variables", []
+        )
 
     def print_warning_user_active(self):
         """
@@ -521,16 +560,7 @@ class Mf6RTM(object):
                 if self.ml_output:
                     self.selected_output.write_ml_arrays(self.current_iteration_conc,
                                                     self.kiter,
-                                                    add_var_names=[
-                                                    'Orgc','O0','tic','C_4',
-                                                    'Fe2','Fe3','N3','NO3',
-                                                    'S_2','SO4','Amm',
-                                                    'N0','pH',
-                                                    'pe','EQUI_Ferrihydrite',
-                                                    'EQUI_Orgmatter',
-                                                    'MOL_CaX2','MOL_FeX2',
-                                                    'MOL_KX','MOL_MgX2',
-                                                    'MOL_NaX','KIN_Pyrite'],
+                                                    add_var_names=self.selected_output.feat_var,
                                                     fname='_features.csv'
                                                 )
 
@@ -561,18 +591,9 @@ class Mf6RTM(object):
                 # Export ML target arrays if option is on
                 if self.ml_output:
                     self.selected_output.write_ml_arrays(self.previous_iteration_conc,
-                                                    self.kiter,
-                                                    add_var_names=[
-                                                    'Orgc','O0','tic','C_4',
-                                                    'Fe2','Fe3','N3','NO3',
-                                                    'S_2','SO4','Amm',
-                                                    'N0','pH',
-                                                    'pe','EQUI_Ferrihydrite',
-                                                    'EQUI_Orgmatter',
-                                                    'MOL_CaX2','MOL_FeX2',
-                                                    'MOL_KX','MOL_MgX2',
-                                                    'MOL_NaX','KIN_Pyrite'],
-                                                    fname='_targets.csv'
+                                            self.kiter,
+                                            add_var_names=self.selected_output.target_var,
+                                            fname='_targets.csv'
                                                 )
 
         sim_end = datetime.now()

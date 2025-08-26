@@ -372,6 +372,7 @@ class SelectedOutput:
         fname : str
             Output filename (relative to model wd).
         """
+
         # Base arrays and labels
         cols = ["time", "cell", "saturation"] + list(self.phreeqcbmi.components)
         arrays = [

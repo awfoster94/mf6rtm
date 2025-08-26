@@ -53,8 +53,8 @@ class MF6RTMConfig:
             'reactive_tsteps': [],
             'reactive_externalio': False,
             'emulator_training_data': False,
-            # 'emulator_feature-variables': [],
-            # 'emulator_target_variables': [],
+            'emulator_feature_variables': [],
+            'emulator_target_variables': [],
         }
 
         # Apply defaults for any missing attributes
@@ -160,7 +160,6 @@ class MF6RTMConfig:
         for attr_name, value in self.__dict__.items():
             if attr_name.startswith('_'):
                 continue
-
             # Handle category prefixes
             handled = False
             for prefix in category_prefixes:
@@ -190,6 +189,7 @@ class MF6RTMConfig:
                         result[main_group] = {}
                     result[main_group]['names'] = value
                 else:
+                    print(attr_name, value)
                     result[attr_name] = value
             else:
                 result[attr_name] = value
@@ -239,7 +239,6 @@ class MF6RTMConfig:
         # Add remaining keys alphabetically
         for key in sorted(other_keys):
             sorted_result[key] = result[key]
-
         return sorted_result
 
     def _update_schema_for_new_attrs(self, attr_names):
@@ -292,12 +291,16 @@ class MF6RTMConfig:
             }
 
         if 'emulator' in config_dict:
-            reactive_config = config_dict['emulator']
+            emu_config = config_dict['emulator']
             kwargs['emulator'] = {
-                'training_data': reactive_config.get('training_data', True),
+                'training_data': emu_config.get('training_data', True),
+                'feature_variables': emu_config.get('feature_variables', None),
+                'target_variables': emu_config.get('target_variables', None)
             }
         # Flatten everything *except* 'reactive'
-        remaining_dict = {k: v for k, v in config_dict.items() if k != 'reactive'}
+        remaining_dict = {k: v for k, v in config_dict.items() if k not in ['reactive',
+                                                                            # 'emulator'
+                                                                            ]}
         flattened = flatten_dict(remaining_dict)
 
         # Important: remove any reactive_* keys that may be left from TOML
@@ -368,8 +371,8 @@ class MF6RTMConfig:
         lines = [f"MF6RTM will run with the following configuration:"]
         lines.append(f"  Reactive: {self.reactive_enabled}")
         lines.append(f"  Reaction timing: {self.reactive_timing}")
-        lines.append(f"  Externalio flag: {self.reactive_externalio}")
-
+        lines.append(f"  External files flag: {self.reactive_externalio}")
+        lines.append(f"  Emulator flag: {self.emulator_training_data}")
         if self.reactive_timing == 'user' and self.reactive_tsteps:
             lines.append(f"  User-defined time steps ({len(self.reactive_tsteps)} total):")
             for kper, kstp in sorted(self.reactive_tsteps):
