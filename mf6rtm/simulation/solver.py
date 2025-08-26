@@ -172,7 +172,6 @@ class Mf6RTM(object):
         nxyz : int
             Total number of cells in the grid.
         """
-
         assert isinstance(mf6api, Mf6API), "MF6API must be an instance of Mf6API"
         assert isinstance(
             phreeqcbmi, PhreeqcBMI
@@ -184,7 +183,7 @@ class Mf6RTM(object):
         self.epsaqu = 0.0
         self.fixed_components = None
         self.selected_output = SelectedOutput(self)
-        self.ml_output = True
+        # self.emulator_training = True
 
         # set component model dictionary
         self.component_model_dict = self._create_component_model_dict()
@@ -196,6 +195,16 @@ class Mf6RTM(object):
 
         self.config = MF6RTMConfig.from_toml_file(self.wd/"mf6rtm.toml")
         self.reactive = self.config.reactive_enabled
+        
+        self.set_emulator_training_flag()
+
+    def set_emulator_training_flag(self):
+        try:
+            self.ml_output = self.config.emulator_training_data
+        except:
+            self.ml_output = False
+        if self.ml_output:
+            print("Saving emulator training data for surrogating")
 
     def print_warning_user_active(self):
         """

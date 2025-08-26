@@ -10,6 +10,7 @@ class PhreeqcBMI(phreeqcrm.BMIPhreeqcRM):
 
     def __init__(self, yaml="mf6rtm.yaml"):
         phreeqcrm.BMIPhreeqcRM.__init__(self)
+        print("Processing initial chemistry configuration")
         self.initialize(yaml)
         self.sat_now = None
 

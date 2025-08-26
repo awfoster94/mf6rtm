@@ -44,6 +44,7 @@ class MF6RTMConfig:
 
         self._validate_reaction_timing()
         self._validate_tsteps()
+
     def _apply_defaults(self):
         """Apply default values for any missing attributes."""
         defaults = {
@@ -51,6 +52,9 @@ class MF6RTMConfig:
             'reactive_timing': 'all',
             'reactive_tsteps': [],
             'reactive_externalio': False,
+            'emulator_training_data': False,
+            # 'emulator_feature-variables': [],
+            # 'emulator_target_variables': [],
         }
 
         # Apply defaults for any missing attributes
@@ -150,80 +154,92 @@ class MF6RTMConfig:
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary for TOML output with nested structure."""
         result = {}
-        reactive_group = {}
-        prefix = "reactive_"
+        category_prefixes = ['reactive_', 'emulator_']  # generalized prefixes
+        category_groups = {prefix.rstrip('_'): {} for prefix in category_prefixes}
 
         for attr_name, value in self.__dict__.items():
             if attr_name.startswith('_'):
                 continue
-            if attr_name.startswith(prefix):
-                key = attr_name[len(prefix):]  # strip the prefix
-                reactive_group[key] = value
+
+            # Handle category prefixes
+            handled = False
+            for prefix in category_prefixes:
+                if attr_name.startswith(prefix):
+                    key = attr_name[len(prefix):]
+                    category_groups[prefix.rstrip('_')][key] = value
+                    handled = True
+                    break
+            if handled:
+                continue
+
             # Handle nested phase attributes
             if '_' in attr_name:
                 parts = attr_name.split('_')
                 if len(parts) >= 3 and parts[0] in ['equilibrium', 'kinetic', 'exchange'] and parts[-1] not in ['names']:
-                    # Reconstruct the main group name
                     main_group = '_'.join(parts[:2])  # e.g., "equilibrium_phases"
-                    sub_group = parts[2]  # e.g., "si" or "parms"
-                    key = '_'.join(parts[3:]) if len(parts) > 3 else parts[2]  # mineral name
+                    sub_group = parts[2]
+                    key = '_'.join(parts[3:]) if len(parts) > 3 else parts[2]
                     if main_group not in result:
                         result[main_group] = {}
                     if sub_group not in result[main_group]:
                         result[main_group][sub_group] = {}
                     result[main_group][sub_group][key] = value
                 elif len(parts) >= 2 and parts[-1] in ['names']:
-                    main_group = '_'.join(parts[:-1])  # e.g., "kinetic_phases"
+                    main_group = '_'.join(parts[:-1])
                     if main_group not in result:
                         result[main_group] = {}
-                    # Create the nested structure that TOML will render as [kinetic_phases.names]
                     result[main_group]['names'] = value
+                else:
+                    result[attr_name] = value
             else:
                 result[attr_name] = value
-        if reactive_group:
-            result['reactive'] = reactive_group
+
+        # Add category groups to result if not empty
+        for category, group_dict in category_groups.items():
+            if group_dict:
+                result[category] = group_dict
+
+        # Build sorted_result: categories first, then phase groups, then remaining keys
         sorted_result = {}
-        # Add 'reactive' first if it exists
-        if 'reactive' in result:
-            sorted_result['reactive'] = result['reactive']
-        # Group keys by phase type and sort within groups
+
+        # Add categories in order of category_prefixes
+        for category in [p.rstrip('_') for p in category_prefixes]:
+            if category in result:
+                sorted_result[category] = result[category]
+
+        # Group phase sections
         phase_groups = {}
         other_keys = []
-
         for key in result.keys():
-            if key == 'reactive':
+            if key in sorted_result:
                 continue
-            # Extract the main phase type ('equilibrium_phases', 'kinetic_phases')
-            if '.' in key:
+            if key.endswith('_phases'):
+                phase_groups.setdefault(key, []).append(key)
+            elif '.' in key:
                 main_phase = key.split('.')[0]
-            else:
-                main_phase = key
-            # Group by main phase type
-            if main_phase.endswith('_phases'):
-                if main_phase not in phase_groups:
-                    phase_groups[main_phase] = []
-                phase_groups[main_phase].append(key)
+                if main_phase.endswith('_phases'):
+                    phase_groups.setdefault(main_phase, []).append(key)
+                else:
+                    other_keys.append(key)
             else:
                 other_keys.append(key)
-        # Add phase groups in alphabetical order of phase type
+
+        # Add phase groups
         for phase_type in sorted(phase_groups.keys()):
-            # Sort keys within each phase group
-            # Put the main section first, then subsections
             phase_keys = phase_groups[phase_type]
-            main_key = phase_type  # e.g., 'equilibrium_phases'
+            main_key = phase_type
             sub_keys = [k for k in phase_keys if k != main_key]
 
-            # Add main section first if it exists
             if main_key in phase_keys:
                 sorted_result[main_key] = result[main_key]
 
-            # Add subsections in alphabetical order
             for sub_key in sorted(sub_keys):
                 sorted_result[sub_key] = result[sub_key]
 
-        # Add any remaining keys alphabetically
+        # Add remaining keys alphabetically
         for key in sorted(other_keys):
             sorted_result[key] = result[key]
+
         return sorted_result
 
     def _update_schema_for_new_attrs(self, attr_names):
@@ -275,6 +291,11 @@ class MF6RTMConfig:
                 'externalio': reactive_config.get('externalio', False)
             }
 
+        if 'emulator' in config_dict:
+            reactive_config = config_dict['emulator']
+            kwargs['emulator'] = {
+                'training_data': reactive_config.get('training_data', True),
+            }
         # Flatten everything *except* 'reactive'
         remaining_dict = {k: v for k, v in config_dict.items() if k != 'reactive'}
         flattened = flatten_dict(remaining_dict)

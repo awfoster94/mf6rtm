@@ -72,7 +72,8 @@ class Regenerator:
             raise FileNotFoundError(f"Required file '{self.phinp}' not found in working directory '{self.wd}'.")
 
         for key, value in self.config.items():
-            if key != 'reactive':
+            if key not in ['reactive', 'emulator']:
+                print(key)
                 names = self.config[key]['names'] if 'names' in self.config[key] else ValueError(f"Key '{key}' does not have 'names' attribute.")
                 for nme in names:
                     for lay in range(self.nlay):
@@ -189,7 +190,7 @@ class Regenerator:
             self.generate_new_script()
         with open(os.path.join(self.wd, filename), 'w') as f:
             f.write(self.regenerated_script)
-        print(f"New script written to {os.path.join(self.wd, filename)}")
+        # print(f"New script written to {os.path.join(self.wd, filename)}")
         self.regenerated_phinp = os.path.join(self.wd, filename)
         return self.regenerated_phinp
 
@@ -273,7 +274,7 @@ class Regenerator:
         file_data = {}
         # Read phase files following the same logic as validate_external_files
         for key, value in self.config.items():
-            if key != 'reactive':
+            if key not in ['reactive', 'emulator']:
                 if 'names' not in self.config[key]:
                     print(f"Warning: Key '{key}' does not have 'names' attribute, skipping.")
                     continue
