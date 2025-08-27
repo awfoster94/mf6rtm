@@ -378,6 +378,7 @@ class Mf6RTM(object):
         """Finalize the phreeqcrm api"""
         self.phreeqcbmi.finalize()
 
+
     def _get_cdlbl_vect(self) -> np.ndarray[np.float64]:
         """Get the concentration array from phreeqc bmi reshape to (ncomps, nxyz)"""
         c_dbl_vect = self.phreeqcbmi.GetConcentrations()
@@ -601,12 +602,6 @@ class Mf6RTM(object):
 
         self.mf6api._check_num_fails()
 
-        print(
-            "\nSolution finished at {0} --- it took: {1:10.5G} mins".format(
-                sim_end.strftime(DT_FMT), td
-            )
-        )
-
         # Clean up and close api objs
         try:
             self._finalize()
@@ -618,6 +613,11 @@ class Mf6RTM(object):
         except:
             print("MR BEAKER IMPORTANT MESSAGE: SOMETHING WENT WRONG. BUMMER\n")
             pass
+        print(
+            "Solution finished at {0}. Running time: {1:10.5G} mins".format(
+                sim_end.strftime(DT_FMT), td
+            )
+        )
         return success
 
 
@@ -658,15 +658,11 @@ def mrbeaker() -> str:
     """ASCII art of Mr. Beaker"""
 
     from mf6rtm.assets import mrbeaker_path
-    # get the path of this file
-    whereismrbeaker = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "mrbeaker.png"
-    )
 
     mr_beaker_image = Image.open(mrbeaker_path())
 
     # Resize the image to fit the terminal width
-    terminal_width = 80  # Adjust this based on your terminal width
+    terminal_width = 70  # Adjust this based on your terminal width
     aspect_ratio = mr_beaker_image.width / mr_beaker_image.height
     terminal_height = int(terminal_width / aspect_ratio * 0.5)
     mr_beaker_image = mr_beaker_image.resize((terminal_width, terminal_height))
@@ -683,7 +679,8 @@ def mrbeaker() -> str:
         for x in range(int(mr_beaker_image.width)):
             pixel_value = mr_beaker_image.getpixel((x, y))
             mrbeaker += ascii_chars[pixel_value // 64]
-        mrbeaker += "\n"
+        # mrbeaker += "\n"
+
     return mrbeaker
 
 def run_cmd():
