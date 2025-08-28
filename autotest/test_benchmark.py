@@ -1030,7 +1030,8 @@ def test05(prefix = 'test05'):
     model = mup3d.Mup3d(prefix,solution, nlay, nrow, ncol)
 
     #set model workspace
-    model.set_wd(os.path.join(f'{prefix}', f'mf6rtm'))
+    modelwd = os.path.join(cwd, f'{prefix}')
+    model.set_wd(modelwd)
 
     # #set database
     database = os.path.join(databasews, f'ex5.dat')
