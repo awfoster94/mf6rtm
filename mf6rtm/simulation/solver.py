@@ -194,7 +194,6 @@ class Mf6RTM(object):
 
         self.config = MF6RTMConfig.from_toml_file(self.wd/"mf6rtm.toml")
         self.reactive = self.config.reactive_enabled
-        
         self.set_emulator_training()
 
     def set_emulator_training(self) -> None:
@@ -543,7 +542,7 @@ class Mf6RTM(object):
         etime = self._set_etime()
         while ctime < etime:
             # self iteration counter
-            self.set_kiter()            
+            self.set_kiter()
             # length of the current solve time
             dt = self._set_time_step()
             self.mf6api.prepare_time_step(dt)
