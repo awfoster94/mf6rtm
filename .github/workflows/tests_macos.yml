@@ -6,7 +6,6 @@ on:
   push:
     branches:
       - develop
-      - feature/externalio
   pull_request:
     branches: [main, develop, feature/externalio]
 
@@ -44,3 +43,5 @@ jobs:
         pip install tox tox-gh-actions
     - name: Test with tox
       run: tox
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
