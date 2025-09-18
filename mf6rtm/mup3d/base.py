@@ -15,7 +15,7 @@ from typing import Union
 from pathlib import Path
 from contextlib import contextmanager
 
-from mf6rtm.simulation.solver import solve, DT_FMT, time_units_dict
+from mf6rtm.simulation.solver import solve
 from mf6rtm.utils import utils
 from mf6rtm.config import MF6RTMConfig
 from phreeqcrm import yamlphreeqcrm
@@ -59,8 +59,13 @@ class Block:
         self.get_names()
 
     def get_names(self):
-        '''Get the block names or phases.
-        '''
+        """Get the block names or phases.
+
+        Returns
+        -------
+        list
+            List of names of geochemical components that serve as keys to the data.
+        """
         if isinstance(self, Solutions):
             self.names = sorted(list(self.data.keys()))
         else:
@@ -71,43 +76,100 @@ class Block:
         return self.names
 
     def set_ic(self, ic: Union[int, float, np.ndarray]):
-        '''Set the initial condition for the block.
-        '''
+        """Set the initial condition for the block.
+
+        Parameters
+        ----------
+        ic
+            Initial condition concentrations. Can be an int, float, or ndarray.
+        Returns
+        -------
+        None
+        """
         assert isinstance(ic, (int, float, np.ndarray)), 'ic must be an int, float or ndarray'
         self.ic = ic
 
-    def set_equilibrate_solutions(self, eq_solutions):
-        '''Set the equilibrium solutions for the exchange phases.
-        Array where index is the exchange phase number and value is the solution number to equilibrate with.
-        '''
+    def set_equilibrate_solutions(self, eq_solutions) -> None:
+        """Set the equilibrium solutions for the exchange phases.
+        Array where index is the exchange phase number and value
+        is the solution number to equilibrate with.
+
+        Parameters
+        ----------
+        eq_solutions
+            List of equilibrium solution indices for each exchange phase.
+
+        Returns
+        -------
+        None
+        """
         self.eq_solutions = eq_solutions
 
-    def set_options(self, options):
+    def set_options(self, options) -> None:
+        """Set the options for the block.
+
+        Parameters
+        ----------
+        options
+            List of options for the block.
+        Returns
+        -------
+        None
+        """
         self.options = options
 
-
 class GasPhase(Block):
+    """The GasPhase Block.
+
+    Attributes
+    ----------
+    parameters : dict, optional
+        Dictionary of parameters for the gas phase. Default is None.
+    """
     def __init__(self, data) -> None:
         super().__init__(data)
-
 
 class Solutions(Block):
-    """The Solutions Block."""
+    """The Solutions Block.
+
+    Attributes
+    ----------
+    parameters : dict, optional
+        Dictionary of parameters for the solutions. Default is None.
+    """
     def __init__(self, data) -> None:
         super().__init__(data)
-
 
 class EquilibriumPhases(Block):
+    """The EquilibriumPhases Block.
+
+    Attributes
+    ----------
+    parameters : dict, optional
+        Dictionary of parameters for the equilibrium phases. Default is None.
+    """
     def __init__(self, data) -> None:
         super().__init__(data)
-
 
 class ExchangePhases(Block):
+    """The ExchangePhases Block.
+
+    Attributes
+    ----------
+    parameters : dict, optional
+        Dictionary of parameters for the exchange phases. Default is None.
+    """
     def __init__(self, data) -> None:
         super().__init__(data)
 
-
 class KineticPhases(Block):
+    """The KineticPhases Block.
+
+    Attributes
+    ----------
+    parameters : dict, optional
+        Dictionary of parameters for the kinetic phases. Default is None.
+    """
     def __init__(self, data) -> None:
         super().__init__(data)
         self.parameters = None
@@ -115,14 +177,30 @@ class KineticPhases(Block):
     def set_parameters(self, parameters):
         self.parameters = parameters
 
-
 class Surfaces(Block):
+    """The Surfaces Block.
+
+    Attributes
+    ----------
+    parameters : dict, optional
+        Dictionary of parameters for the surfaces. Default is None.
+    """
     def __init__(self, data) -> None:
         super().__init__(data)
         # super().__init__(ic)
 
-
 class ChemStress():
+    """The ChemStress class for handling stress period data.
+
+    Attributes
+    ----------
+    packnme : str
+        Name of the package.
+    sol_spd : list, optional
+        List of solution stress period data. Default is None.
+    packtype : str, optional
+        Type of the package. Default is None.
+    """
     def __init__(self, packnme) -> None:
         self.packnme = packnme
         self.sol_spd = None
@@ -305,31 +383,81 @@ class Mup3d(object):
             f'not {self.solutions.ic.shape}'
         )
     def set_componenth2o(self, flag):
-        '''Set the component H2O to be True or False.
+        """Set the component H2O to be True or False.
         if False Total H and Total O are transported
-        if True H2O, Excess H and Excess O are transported'''
+        if True H2O, Excess H and Excess O are transported
+
+        Parameters
+        ----------
+        flag : bool
+            True to include H2O as a component, False otherwise.
+
+        Returns
+        -------
+        bool
+            The value of the componenth2o flag.
+        Raises
+        ------
+        AssertionError
+            If flag is not a boolean.
+        """
+
         assert isinstance(flag, bool), f"flag must be a boolean, got {type(flag).__name__}"
         self.componenth2o = flag
         return self.componenth2o
 
     def get_componenth2o(self):
-        '''Get componenth2o flag'''
+        """Get componenth2o flag
+
+        Returns
+        -------
+        bool
+            The value of the componenth2o flag.
+        """
         return getattr(self, 'componenth2o')
 
     def set_fixed_components(self, fixed_components):
-        '''Set the fixed components for the MF6RTM model. These are the components that are not transported during the simulation.
-        '''
+        """Set the fixed components for the MF6RTM model.
+        These are the components that are not transported during the simulation.
+
+        Parameters
+        ----------
+        fixed_components : list
+            List of component names to be fixed (not transported).
+        Returns
+        -------
+        None
+        """
         # FIXME: implemented but commented in main coupling loop
         self.fixed_components = fixed_components
 
     def set_initial_temp(self, temp):
+        """Sets the initial temperature for the MF6RTM model.
+
+        Parameters
+        ----------
+        temp : int, float, or list
+            Initial temperature value(s). Can be a single value (int or float)
+            for homogeneous temperature or a list for spatially variable temperature.
+        Returns
+        -------
+        None
+        """
         assert isinstance(temp, (int, float, list)), 'temp must be an int or float'
         # TODO: for non-homogeneous fields allow 3D and 2D arrays
         self.init_temp = temp
 
     def set_phases(self, phase):
-        '''Sets the phases for the MF6RTM model.
-        '''
+        """Sets the phases for the MF6RTM model.
+
+        Parameters
+        ----------
+        phase : KineticPhases, ExchangePhases, EquilibriumPhases, or Surfaces
+            Instance of one of the phase classes containing geochemical data.
+        Returns
+        -------
+        None
+        """
         # Dynamically get the class of the phase object
         phase_class = phase.__class__
 
@@ -347,8 +475,16 @@ class Mup3d(object):
         setattr(self, f"{phase_class.__name__.lower().split('phases')[0]}_phases", phase)
 
     def set_exchange_phases(self, exchanger):
-        '''Sets the exchange phases for the MF6RTM model.
-        '''
+        """Sets the exchange phases for the MF6RTM model.
+
+        Parameters
+        ----------
+        exchanger : ExchangePhases
+            Instance of the ExchangePhases class containing geochemical data.
+        Returns
+        -------
+        None
+        """
         assert isinstance(exchanger, ExchangePhases), 'exchanger must be an instance of the Exchange class'
         # exchanger.data = {i: exchanger.data[key] for i, key in enumerate(exchanger.data.keys())}
         if isinstance(exchanger.ic, (int, float)):
@@ -357,8 +493,16 @@ class Mup3d(object):
         self.exchange_phases = exchanger
 
     def set_equilibrium_phases(self, eq_phases):
-        '''Sets the equilibrium phases for the MF6RTM model.
-        '''
+        """Sets the equilibrium phases for the MF6RTM model.
+
+        Parameters
+        ----------
+        eq_phases : EquilibriumPhases
+            Instance of the EquilibriumPhases class containing geochemical data.
+        Returns
+        -------
+        None
+        """
         assert isinstance(eq_phases, EquilibriumPhases), 'eq_phases must be an instance of the EquilibriumPhases class'
         # change all keys from eq_phases so they start from 0
         eq_phases.data = {i: eq_phases.data[key] for i, key in enumerate(eq_phases.data.keys())}
@@ -370,6 +514,14 @@ class Mup3d(object):
     def set_charge_offset(self, charge_offset):
         """
         Sets the charge offset for the MF6RTM model to handle negative charge values
+
+        Parameters
+        ----------
+        charge_offset : float
+            The charge offset value to be added to the charge concentration.
+        Returns
+        -------
+        None
         """
         self.charge_offset = charge_offset
 
@@ -377,16 +529,38 @@ class Mup3d(object):
             self,
             chem_stress: ChemStress,
     ) -> None:
+        """
+        Sets the ChemStress instance for the MF6RTM model.
+
+        Parameters
+        ----------
+        chem_stress : ChemStress
+            Instance of the ChemStress class containing stress period data.
+        Returns
+        -------
+        None
+        """
         assert isinstance(chem_stress, ChemStress), 'chem_stress must be an instance of the ChemStress class'
         attribute_name = chem_stress.packnme
         setattr(self, attribute_name, chem_stress)
 
         self.initialize_chem_stress(attribute_name)
 
-
     def set_wd(self, wd):
         """
         Sets the working directory for the MF6RTM model.
+
+        Parameters
+        ----------
+        wd (str): The path to the working directory.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        AssertionError: If the working directory path is not a string.
         """
         # get absolute path of the working directory
         wd = Path(os.path.abspath(wd))
@@ -400,9 +574,11 @@ class Mup3d(object):
         Sets the database for the MF6RTM model.
 
         Parameters:
+        ----------
         database (str): The path to the database file.
 
         Returns:
+        -------
         None
         """
         try:
@@ -426,15 +602,24 @@ class Mup3d(object):
         Sets the postfix file for the MF6RTM model.
 
         Parameters:
+        ----------
         postfix (str): The path to the postfix file.
 
         Returns:
+        -------
         None
         """
         assert os.path.exists(postfix), f'{postfix} not found'
         self.postfix = postfix
 
     def set_reaction_temp(self):
+        """Sets the reaction temperature for the MF6RTM model.
+
+        Returns
+        -------
+        list
+            List of reaction temperatures for each grid cell.
+        """
         if isinstance(self.init_temp, (int, float)):
             rx_temp = [self.init_temp]*self.nxyz
             print('Using temperatue of {} for all cells'.format(rx_temp[0]))
@@ -447,6 +632,16 @@ class Mup3d(object):
     def generate_phreeqc_script(self, add_charge_flag=False):
         """
         Generates the phinp file for the MF6RTM model.
+
+        Parameters
+        ----------
+        add_charge_flag : bool, optional
+            Whether to add a charge flag to species in the solution block.
+            Default is False.
+        Returns
+        -------
+        str
+            The generated PHREEQC script as a string.
         """
 
         # where to save the phinp file
@@ -546,20 +741,46 @@ class Mup3d(object):
         return script
 
     def initialize(self, nthreads=1, add_charge_flag=False):
-        '''Initialize a PhreeqcRM object to calculate initial concentrations
-        from a PHREEQC inputs, adding the following attributes to the Mup3d
-        object:
+        """Initialize a PhreeqcRM object and calculate initial concentrations.
 
-        self.components: list of transportable components
-        self.init_conc_array_phreeqc: A 1D array of concentrations (mol/L)
-            structured for PhreeqcRM, with each component conc for each grid
-            cell ordered by `model.components`
-        self.sconc: A dictionary with components as keys and values as an array
-            of concentrations (mol/m^3) structured to match the shape of the
-            Modflow6 model domain grid
+        This method initializes a PhreeqcRM object using PHREEQC inputs and adds several
+        key attributes to the Mup3d object for reactive transport modeling.
 
-        and others...
-        '''
+        Parameters
+        ----------
+        nthreads : int, optional
+            Number of threads for parallel processing. Default is 1.
+        add_charge_flag : bool, optional
+            Whether to add charge flag to species. Default is False.
+
+        Attributes Added
+        ---------------
+        components : list
+            List of transportable chemical components.
+        init_conc_array_phreeqc : ndarray
+            1D array of concentrations (mol/L) structured for PhreeqcRM, with each
+            component concentration for each grid cell ordered by model.components.
+        sconc : dict
+            Dictionary with components as keys and concentration arrays (mol/m^3) as values,
+            structured to match the shape of the Modflow6 model domain grid.
+        phreeqc_rm : PhreeqcRM
+            Initialized PhreeqcRM object.
+        nchem : int
+            Number of chemistry cells.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        This method performs several key initialization steps:
+        1. Generates PHREEQC input script
+        2. Initializes PhreeqcRM object
+        3. Sets up initial conditions
+        4. Calculates initial concentrations
+        5. Converts concentrations to proper units and grid structure
+        """
         # get model dis info
         # dis = sim.get_model(sim.model_names[0]).dis
 
@@ -664,16 +885,39 @@ class Mup3d(object):
         return
 
     def set_config(self, **kwargs) -> MF6RTMConfig:
-        """Create and store a config object."""
+        """Create and store a config object.
+
+        Parameters
+        ----------
+        **kwargs : dict
+            Configuration parameters for MF6RTMConfig.
+
+        Returns
+        -------
+        MF6RTMConfig
+            The created configuration object.
+        """
         self.config = MF6RTMConfig(**kwargs)
         return self.config
 
     def get_config(self):
-        """Retrieve config object"""
+        """Retrieve config object
+
+        Returns
+        -------
+        dict
+            Configuration parameters as a dictionary.
+        """
         return self.config.to_dict()
 
     def save_config(self):
-        """Save config toml file"""
+        """Save config toml file
+
+        Returns
+        -------
+        Path
+            Path to the saved configuration file.
+        """
         assert self.wd is not None, "Model directory not specified"
         config_path = self.wd / "mf6rtm.toml"
         print(self.config)
@@ -681,7 +925,12 @@ class Mup3d(object):
         return config_path
 
     def write_simulation(self):
-        """write phreqcrm simulation and configuration files"""
+        """Write phreqcrm simulation and configuration files
+
+        Returns
+        -------
+        None
+        """
         self._write_phreeqc_init_file()
         if self.config.reactive_externalio:
             self.write_internal_parameters()
@@ -804,7 +1053,16 @@ class Mup3d(object):
         return sconc
 
     def _initialize_phreeqc_from_file(self, yamlfile):
-        '''Initialize phreeqc from a yaml file'''
+        """Initialize phreeqc from a yaml file
+
+        Parameters
+        ----------
+        yamlfile : str
+            Path to the yaml file.
+        Returns
+        -------
+        None
+        """
         yamlfile = self.phreeqcyaml_file
         phreeqcrm_from_yaml = phreeqcrm.InitializeYAML(yamlfile)
         if self.phreeqc_rm is None:
@@ -817,7 +1075,22 @@ class Mup3d(object):
                                                     "exchange_phases": ["dummy"]
                                                     }
                                     ):
-        """Add non-external attributes to the config object."""
+        """Add non-external attributes to the config object.
+
+        Parameters
+        ----------
+        internals : dict
+            Dictionary with phase names as keys and list of attributes to add as values.
+            Default is {
+                "equilibrium_phases": ["si"],
+                "kinetic_phases": ["parms", "formula", "steps"],
+                "exchange_phases": ["dummy"]
+            }.
+
+        Returns
+        -------
+        None
+        """
         valid_internals = {k: v for k, v in internals.items() if getattr(self, k, None) is not None}
         # self.add_read_external_files_flag_to_config(flag=True)
         for key in valid_internals.keys():
@@ -999,7 +1272,7 @@ class Mup3d(object):
                                                     "equilibrium_phases",
                                                     "kinetic_phases"
                                                     ],
-                                     property_to_write = ['m0']):
+                                     property_to_write = ['m0']) -> None:
         """
         Write layered external text files for selected geochemical phases and properties.
 
@@ -1039,8 +1312,18 @@ class Mup3d(object):
                         with open(filepath, "w") as fh:
                             fh.write("\n".join(f"{val:.10e}" for val in arr[ly].flatten()))
 
-    def _write_phreeqc_init_file(self, filename='mf6rtm.yaml'):
-        '''Write the phreeqc init yaml file'''
+    def _write_phreeqc_init_file(self, filename='mf6rtm.yaml') -> None:
+        """Write the phreeqc init yaml file.
+
+        Parameters
+        ----------
+        filename : str, optional
+            Name of the yaml file. Default is 'mf6rtm.yaml'.
+
+        Returns
+        -------
+        None
+        """
         fdir = os.path.join(self.wd, filename)
         phreeqcrm_yaml = yamlphreeqcrm.YAMLPhreeqcRM()
         phreeqcrm_yaml.YAMLSetGridCellCount(self.nxyz)
@@ -1106,7 +1389,20 @@ class Mup3d(object):
         return
 
     def run(self, reactive = None, nthread=1):
-        '''Wrapper function to run the MF6RTM model'''
+        """Wrapper function to run the MF6RTM model
+
+        Parameters
+        ----------
+        reactive : bool, optional
+            Whether to run the model in reactive mode. If None, uses the value from the config
+            nthread : int, optional
+                Number of threads to use for the simulation. Default is 1.
+
+        Returns
+        -------
+        bool
+            True if the model ran successfully, False otherwise.
+        """
         with working_dir(self.wd):
             print("Running mf6rtm", flush=True)
             success = solve(self.wd, reactive=reactive, nthread=nthread)
@@ -1114,6 +1410,16 @@ class Mup3d(object):
 
 @contextmanager
 def working_dir(path):
+    """Context manager for changing the current working directory.
+
+    Parameters
+    ----------
+    path : str
+        Path to the directory to change to.
+    Yields
+    ------
+    None
+    """
     old_dir = os.getcwd()
     try:
         os.chdir(path)
