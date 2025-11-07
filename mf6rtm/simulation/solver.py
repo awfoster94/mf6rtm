@@ -1,5 +1,5 @@
-"""The mf6rtm module provides the Mf6RTM class that couples modflowapi and
-phreeqcrm.
+"""The solver module provides the Mf6RTM class that couples modflowapi and
+phreeqcrm, along with functions to run the coupled simulations.
 """
 import os
 # import warnings
@@ -302,31 +302,37 @@ class Mf6RTM(object):
         -------
         component_model_dict : dict[str, str]
             A dictionary where the keys are the component names and the values are
-            the corresponding model names.
+            the corresponding transport model names.
         """
         components = self.phreeqcbmi.get_value_ptr("Components")
+        # convert np.array to list of pure python strings
         components = [str(component) for component in components]
 
-        component_codes = []
+        gwt_model_names = [
+            name for name in self.mf6api.sim.model_names 
+            if (self.mf6api.sim.get_model(name).model_type == 'gwt6')
+        ] 
+        gwt_name_prefix = longest_common_substring(gwt_model_names)
+
+        component_model_dict = dict(zip(components, [None]*len(components)))
         for component in components:
-            component_code = component.lower()
-            if component_code == 'charge':
-                component_code = 'ch'
-            component_codes.append(component_code)
+            for model_name in gwt_model_names: 
+                if model_name.replace(gwt_name_prefix, "").lower() == component.lower():
+                    component_model_dict[component] = model_name
+            if (component.lower() == 'charge') and (component_model_dict[component] == None):
+                for model_name in gwt_model_names:
+                    if model_name.replace(gwt_name_prefix, "").lower() == 'ch':
+                        component_model_dict[component] = model_name
+            assert (component_model_dict[component] != None, 
+                f"Component {component} is not matched with a transport model"
+            )
 
-        model_names = self.mf6api.sim.model_names
-        gwt_model_names = []
-        for model_name in model_names:
-            if self.mf6api.sim.get_model(model_name).model_type == 'gwt6':
-                gwt_model_names.append(model_name)
+        # TODO: add to attributes?
+        conservative_transport_models = list(
+            set(gwt_model_names) - set(component_model_dict.values())
+        )
 
-        # Confirm alignment
-        assert len(components) == len(gwt_model_names)
-        assert len(components) == len(component_codes)
-        for component_code, gwt_model_name in zip(component_codes, gwt_model_names):
-            assert component_code.lower() in gwt_model_name.lower()
-
-        return dict(zip(components, gwt_model_names))
+        return component_model_dict
 
     # TODO: remove or have raise not implemented error
     def _set_fixed_components(self, fixed_components): ...
@@ -385,6 +391,7 @@ class Mf6RTM(object):
         conc = [
             c_dbl_vect[i : i + self.nxyz] for i in range(0, len(c_dbl_vect), self.nxyz)
         ]  # reshape array
+        # TODO: refactor to use np.reshape(), which is 2x faster
         return conc
 
     def _set_conc_at_current_kstep(self, c_dbl_vect: np.ndarray[np.float64]):
@@ -652,6 +659,38 @@ def get_conc_change_mask(
     # where values <0 put -1 else 1
     diff = np.where(diff == 0, 0, 1)
     return diff
+
+
+def longest_common_substring(strings):
+    """Function to find the longest common substring of a list of strings
+    Used here to find the common "stem" of the GWT model names for matching
+    with PhreeqcRM components.
+    """
+    if not strings:
+        return ""
+
+    # Start with the first string as a reference
+    reference_string = strings[0]
+    longest_lcs = ""
+
+    # Iterate through all possible substrings of the reference string
+    for i in range(len(reference_string)):
+        for j in range(i + 1, len(reference_string) + 1):
+            current_substring = reference_string[i:j]
+            
+            # Check if this substring exists in all other strings
+            is_common = True
+            for other_string in strings[1:]:
+                if current_substring not in other_string:
+                    is_common = False
+                    break
+            
+            # If it's common and longer than the current longest, update
+            if is_common and len(current_substring) > len(longest_lcs):
+                longest_lcs = current_substring
+    
+    return longest_lcs
+
 
 def mrbeaker() -> str:
     """ASCII art of Mr. Beaker"""

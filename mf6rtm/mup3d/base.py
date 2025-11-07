@@ -18,7 +18,7 @@ from contextlib import contextmanager
 from mf6rtm.simulation.solver import solve
 from mf6rtm.utils import utils
 from mf6rtm.config import MF6RTMConfig
-from phreeqcrm import yamlphreeqcrm
+
 
 class Block:
     """Base class for PHREEQC input "keyword data blocks".
@@ -27,7 +27,7 @@ class Block:
     ----------
     data : dict
         Dictionary of geochemical components (keys) and their total concentrations
-        (list) indexed by block number, similar to a .pqi file.
+        (list) and other parameters, indexed by block number, similar to a .pqi file.
     names : list
         List of names of geochemical components that serve as keys to the data.
     ic : array
@@ -59,7 +59,7 @@ class Block:
         self.get_names()
 
     def get_names(self):
-        """Get the block names or phases.
+        """Get the names of geochemical components or phases specified in the block.
 
         Returns
         -------
@@ -67,7 +67,7 @@ class Block:
             List of names of geochemical components that serve as keys to the data.
         """
         if isinstance(self, Solutions):
-            self.names = sorted(list(self.data.keys()))
+            self.names = sorted(self.data.keys())
         else:
             block_names = []
             for block_num in self.data:
@@ -1325,7 +1325,7 @@ class Mup3d(object):
         None
         """
         fdir = os.path.join(self.wd, filename)
-        phreeqcrm_yaml = yamlphreeqcrm.YAMLPhreeqcRM()
+        phreeqcrm_yaml = phreeqcrm.YAMLPhreeqcRM()
         phreeqcrm_yaml.YAMLSetGridCellCount(self.nxyz)
         phreeqcrm_yaml.YAMLThreadCount(1)
         status = phreeqcrm_yaml.YAMLSetComponentH2O(self.componenth2o)
