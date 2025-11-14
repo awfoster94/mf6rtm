@@ -253,6 +253,9 @@ class Mup3d(object):
         Postfix for the output files.
     phreeqc_rm : object
         PHREEQC reactive transport model instance.
+    init_conc_array_phreeqc : ndarray
+        1D array of concentrations (mol/L) structured for PhreeqcRM, with each
+        component concentration for each grid cell ordered by model.components.
     sconc : dict[str, np.ndarray]
         Dictionary of concentrations in units of moles per m^3 and structured to
         match the shape of Modflow's grid.
@@ -799,6 +802,7 @@ class Mup3d(object):
 
         # Set concentration units
         status = self.phreeqc_rm.SetUnitsSolution(2)
+            # 1, mg/L; 2, mol/L; 3, mass fraction, kg/kgs
         # status = self.phreeqc_rm.SetUnitsExchange(1)
         # status = self.phreeqc_rm.SetUnitsSurface(1)
         # status = self.phreeqc_rm.SetUnitsKinetics(1)

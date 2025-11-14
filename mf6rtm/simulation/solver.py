@@ -44,8 +44,8 @@ def check_nam_files(wd:os.PathLike) -> tuple[os.PathLike,os.PathLike]:
     """Check if the nam files are present in the model directory"""
     nam = [f for f in os.listdir(wd) if f.endswith(".nam")]
     assert "mfsim.nam" in nam, "mfsim.nam file not found in model directory"
-    assert "gwf.nam" in nam, "gwf.nam file not found in model directory"
-    return os.path.join(wd, "mfsim.nam"), os.path.join(wd, "gwf.nam")
+    # assert "gwf.nam" in nam, "gwf.nam file not found in model directory"
+    return os.path.join(wd, "mfsim.nam") #, os.path.join(wd, "gwf.nam")
 
 def prep_to_run(wd:os.PathLike) -> tuple[os.PathLike,os.PathLike]:
     """
@@ -132,7 +132,12 @@ def set_nthread_yaml(yamlfile:os.PathLike, nthread: int = 1) -> None:
 
 
 class Mf6RTM(object):
-    def __init__(self, wd:os.PathLike, mf6api: Mf6API, phreeqcbmi: PhreeqcBMI) -> None:
+    def __init__(
+        self, 
+        wd:os.PathLike, 
+        mf6api: Mf6API, 
+        phreeqcbmi: PhreeqcBMI,
+    ) -> None:
         """
         Initialize the Mf6RTM instance with specified working directory, MF6API,
         and PhreeqcBMI instances.
@@ -169,6 +174,9 @@ class Mf6RTM(object):
         component_model_dict : dict[str, str]
             Dictionary mapping PHREEQC aqueous chemical components to their
             corresponding Modflow 6 groundwater transport (gwt6) model names.
+        conservative_transport_models: list[str]
+            List of Modflow 6 groundwater transport (gwt6) model not coupled
+            with PhreeqcRM
         nxyz : int
             Total number of cells in the grid.
         """
@@ -184,8 +192,8 @@ class Mf6RTM(object):
         self.fixed_components = None
         self.selected_output = SelectedOutput(self)
 
-        # set component model dictionary
-        self.component_model_dict = self._create_component_model_dict()
+        # set component model dictionary & list of conservative_transport_models
+        self.component_model_dict, self.conservative_transport_models = self._create_component_model_dict()
 
         # set discretization
         self.nxyz = total_cells_in_grid(self.mf6api)
@@ -293,7 +301,7 @@ class Mf6RTM(object):
         self.time_conversion = 1.0 / time_units_dict[time_units]
         self.phreeqcbmi.SetTimeConversion(self.time_conversion)
 
-    def _create_component_model_dict(self) -> dict[str, str]:
+    def _create_component_model_dict(self)-> tuple[dict[str, str], list[str]]:
         """
         Create a dictionary of PHREEQC aqueous chemical component names and
         their corresponding Modflow 6 Groundwater Transport (GWT) model names.
@@ -327,12 +335,11 @@ class Mf6RTM(object):
                 f"Component {component} is not matched with a transport model"
             )
 
-        # TODO: add to attributes?
         conservative_transport_models = list(
             set(gwt_model_names) - set(component_model_dict.values())
         )
 
-        return component_model_dict
+        return component_model_dict, conservative_transport_models
 
     # TODO: remove or have raise not implemented error
     def _set_fixed_components(self, fixed_components): ...

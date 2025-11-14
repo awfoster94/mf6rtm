@@ -6,8 +6,8 @@ import phreeqcrm
 from mf6rtm.utils import utils
 from mf6rtm.simulation.mf6api import Mf6API
 
-class PhreeqcBMI(phreeqcrm.BMIPhreeqcRM):
 
+class PhreeqcBMI(phreeqcrm.BMIPhreeqcRM):
     def __init__(self, yaml="mf6rtm.yaml"):
         phreeqcrm.BMIPhreeqcRM.__init__(self)
         print("Processing initial chemistry configuration")
@@ -90,7 +90,7 @@ class PhreeqcBMI(phreeqcrm.BMIPhreeqcRM):
         #     print('Error in RunCells: {0}'.format(status))
         self.update()
         td = (datetime.now() - sol_start).total_seconds() / 60.0
-        message = f"{'Reactions':<15} | {'Stress period:':<15} {self.kper:<5} | {'Time step:':<15} {self.kstp:<10} | {'Completed in :':<10}  {td//60:.0f} min {td%60:10.2e} sec"
+        message = f"{'Reactions':<15} | {'Stress period:':<15} {self.kper:<5} | {'Time step:':<15} {self.kstp:<10} | {'Completed in :':<10}  {td // 60:.0f} min {td % 60:10.2e} sec"
         self.LogMessage(message)
         print(message)
         # self.ScreenMessage(message)
