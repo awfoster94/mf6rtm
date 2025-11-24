@@ -4,43 +4,7 @@ import numpy as np
 try:
     from phreeqcrm import yamlphreeqcrm
 except ImportError:
-    print("Warning: phreeqcrm not found. This is a demonstration of the concept.")
-    # Mock class for demonstration
-    class YAMLPhreeqcRM:
-        def __init__(self):
-            self.yaml_doc = []
-        def YAMLSetGridCellCount(self, count): pass
-        def YAMLThreadCount(self, nthreads): pass
-        def YAMLSetComponentH2O(self, tf): pass
-        def YAMLUseSolutionDensityVolume(self, tf): pass
-        def YAMLSetFilePrefix(self, prefix): pass
-        def YAMLOpenFiles(self): pass
-        def YAMLSetErrorHandlerMode(self, mode): pass
-        def YAMLSetRebalanceFraction(self, f): pass
-        def YAMLSetRebalanceByCell(self, tf): pass
-        def YAMLSetPartitionUZSolids(self, tf): pass
-        def YAMLSetUnitsSolution(self, option): pass
-        def YAMLSetUnitsPPassemblage(self, option): pass
-        def YAMLSetUnitsExchange(self, option): pass
-        def YAMLSetUnitsSurface(self, option): pass
-        def YAMLSetUnitsGasPhase(self, option): pass
-        def YAMLSetUnitsSSassemblage(self, option): pass
-        def YAMLSetUnitsKinetics(self, option): pass
-        def YAMLSetPorosity(self, por): pass
-        def YAMLSetPrintChemistryMask(self, cell_mask): pass
-        def YAMLSetPrintChemistryOn(self, workers, initial_phreeqc, utility): pass
-        def YAMLSetRepresentativeVolume(self, rv): pass
-        def YAMLLoadDatabase(self, database): pass
-        def YAMLRunFile(self, workers, initial_phreeqc, utility, chemistry_name): pass
-        def YAMLRunString(self, workers, initial_phreeqc, utility, input_string): pass
-        def YAMLAddOutputVars(self, option, definition): pass
-        def YAMLFindComponents(self): pass
-        def YAMLInitialPhreeqc2Module(self, ic): pass
-        def YAMLRunCells(self): pass
-        def YAMLSetTime(self, time): pass
-        def WriteYAMLDoc(self, filename): pass
-
-    yamlphreeqcrm = type('module', (), {'YAMLPhreeqcRM': YAMLPhreeqcRM})()
+    print("Warning: phreeqcrm not found.")
 
 def load_yaml_to_phreeqcrm(yaml_file_path):
     """
