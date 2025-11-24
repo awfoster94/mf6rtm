@@ -23,12 +23,10 @@ def concentration_m3_to_l(x):
     c = x * 1e-3
     return c
 
-
 def concentration_to_massrate(q, conc):
     """Calculate mass rate from rate (L3/T) and concentration (M/L3)"""
     mrate = q * conc  # M/T
     return mrate
-
 
 def concentration_volbulk_to_volwater(conc_volbulk, porosity):
     """Calculate concentrations as volume of pore water from bulk volume and porosity"""
@@ -94,7 +92,6 @@ def solution_csv_to_dict(csv_file, header=True):
         #     data[key] = [float(i) for i in value]
     return data
 
-
 def kinetics_df_to_dict(data, header=True):
     """Read a kinetics CSV file and convert it to a dictionary
     Parameters
@@ -141,7 +138,6 @@ def solution_df_to_dict(data, header=True):
         data[key] = [float(i) for i in value]
     return data
 
-
 def equilibrium_phases_csv_to_dict(csv_file, header=True):
     """Read an equilibrium phases CSV file and convert it to a dictionary
     Parameters
@@ -174,7 +170,6 @@ def equilibrium_phases_csv_to_dict(csv_file, header=True):
                 # data[int(row[-1])] # append {row[0]: [float(row[1]), float(row[2])]} to the existing nested dictionary
                 data[int(row[-1])][row[0]] = [float(row[1]), float(row[2])]
     return data
-
 
 def surfaces_csv_to_dict(csv_file, header=True):
     """Read an equilibrium phases CSV file and convert it to a dictionary
@@ -379,7 +374,6 @@ def handle_block(current_items, block_generator, i, *args, **kwargs):
     script += block_generator(current_items, i, *args, **kwargs)
     return script
 
-
 def get_compound_names(database_file, block="SOLUTION_MASTER_SPECIES"):
     """Get a list of compound names from a PHREEQC database file
     Parameters
@@ -459,6 +453,7 @@ def map_species_property_to_grid(data_dict, ic_array, species, property_key):
     output = np.zeros_like(ic_array, dtype=float)
 
     for zone_idx, species_dict in data_dict.items():
+        print(zone_idx, species_dict)
         if species not in species_dict:
             raise KeyError(f"Species '{species}' not found in block id {zone_idx}")
         if property_key not in species_dict[species]:
@@ -539,7 +534,6 @@ def generate_surface_block(surface_dict, i, options=[]):
         # script += f"    -no_edl\n"
     script += "END\n"
     return script
-
 
 # def generate_kinetics_block(kinetics_dict, i):
 #     """Generate a KINETICS block for PHREEQC input script
@@ -708,7 +702,6 @@ def rearrange_copy_blocks(script):
 
     return rearranged_script
 
-
 def prep_bins(dest_path, src_path=os.path.join("bin"), get_only=[]):
     """Copy executables from the source path to the destination path"""
 
@@ -734,6 +727,59 @@ def prep_bins(dest_path, src_path=os.path.join("bin"), get_only=[]):
         shutil.copy2(os.path.join(bin_path, f), os.path.join(dest_path, f))
     return sorted(files)
 
-
 def get_indices(element, lst):
     return [i for i, x in enumerate(lst) if x == element]
+
+def fill_missing_minerals(data_dict):
+    """Fill missing minerals in all zones with zero parameters.
+
+    Parameters
+    ----------
+    data_dict : dict
+        Dictionary with zone indices as keys and mineral dictionaries as values.
+        Each mineral dictionary contains parameter names and values.
+
+    Returns
+    -------
+    dict
+        Updated dictionary with all minerals present in all zones.
+
+    Examples
+    --------
+    >>> data_dict = {
+    ...     0: {'Goethite': {'m0': 1.0, 'si': 0.9}},
+    ...     1: {'Pyrite': {'m0': 2.0, 'si': 1.8}}
+    ... }
+    >>> filled = fill_missing_minerals(data_dict)
+    >>> filled[0]['Pyrite']  # Now exists with zeros
+    {'m0': 0.0, 'si': 0.0}
+    """
+    # Collect all unique minerals across all zones
+    all_minerals = set()
+    for zone_dict in data_dict.values():
+        all_minerals.update(zone_dict.keys())
+
+    # Collect all unique parameters for each mineral
+    mineral_params = {}
+    for zone_dict in data_dict.values():
+        for mineral, params in zone_dict.items():
+            if mineral not in mineral_params:
+                mineral_params[mineral] = set(params.keys())
+            else:
+                mineral_params[mineral].update(params.keys())
+
+    # Fill in missing minerals and parameters
+    for zone_idx in data_dict.keys():
+        for mineral in all_minerals:
+            if mineral not in data_dict[zone_idx]:
+                # Mineral doesn't exist in this zone, add it with zeros
+                data_dict[zone_idx][mineral] = {
+                    param: 0.0 for param in mineral_params[mineral]
+                }
+            else:
+                # Mineral exists, but check if all parameters are present
+                for param in mineral_params[mineral]:
+                    if param not in data_dict[zone_idx][mineral]:
+                        data_dict[zone_idx][mineral][param] = 0.0
+
+    return data_dict
