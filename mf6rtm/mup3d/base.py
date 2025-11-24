@@ -150,6 +150,7 @@ class EquilibriumPhases(Block):
     """
     def __init__(self, data) -> None:
         super().__init__(data)
+        self.data = utils.fill_missing_minerals(data)
 
 class ExchangePhases(Block):
     """The ExchangePhases Block.
@@ -172,6 +173,7 @@ class KineticPhases(Block):
     """
     def __init__(self, data) -> None:
         super().__init__(data)
+        self.data = utils.fill_missing_minerals(data)
         self.parameters = None
 
     def set_parameters(self, parameters):
