@@ -133,9 +133,9 @@ def set_nthread_yaml(yamlfile:os.PathLike, nthread: int = 1) -> None:
 
 class Mf6RTM(object):
     def __init__(
-        self, 
-        wd:os.PathLike, 
-        mf6api: Mf6API, 
+        self,
+        wd:os.PathLike,
+        mf6api: Mf6API,
         phreeqcbmi: PhreeqcBMI,
     ) -> None:
         """
@@ -317,21 +317,21 @@ class Mf6RTM(object):
         components = [str(component) for component in components]
 
         gwt_model_names = [
-            name for name in self.mf6api.sim.model_names 
+            name for name in self.mf6api.sim.model_names
             if (self.mf6api.sim.get_model(name).model_type == 'gwt6')
-        ] 
+        ]
         gwt_name_prefix = longest_common_substring(gwt_model_names)
 
         component_model_dict = dict(zip(components, [None]*len(components)))
         for component in components:
-            for model_name in gwt_model_names: 
+            for model_name in gwt_model_names:
                 if model_name.replace(gwt_name_prefix, "").lower() == component.lower():
                     component_model_dict[component] = model_name
             if (component.lower() == 'charge') and (component_model_dict[component] == None):
                 for model_name in gwt_model_names:
                     if model_name.replace(gwt_name_prefix, "").lower() == 'ch':
                         component_model_dict[component] = model_name
-            assert (component_model_dict[component] != None, 
+            assert (component_model_dict[component] != None,
                 f"Component {component} is not matched with a transport model"
             )
 
@@ -684,18 +684,18 @@ def longest_common_substring(strings):
     for i in range(len(reference_string)):
         for j in range(i + 1, len(reference_string) + 1):
             current_substring = reference_string[i:j]
-            
+
             # Check if this substring exists in all other strings
             is_common = True
             for other_string in strings[1:]:
                 if current_substring not in other_string:
                     is_common = False
                     break
-            
+
             # If it's common and longer than the current longest, update
             if is_common and len(current_substring) > len(longest_lcs):
                 longest_lcs = current_substring
-    
+
     return longest_lcs
 
 
