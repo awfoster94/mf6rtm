@@ -148,7 +148,7 @@ class TestEquilibriumPhases:
         assert 'Calcite' in eq_phases.names
         assert 'Gypsum' in eq_phases.names
     
-    @patch('mf6rtm.utils.fill_missing_minerals')
+    @patch('mf6rtm.mup3d.base.utils.fill_missing_minerals')
     def test_fill_missing_minerals_called(self, mock_fill, sample_equilibrium_data):
         """Test that fill_missing_minerals is called."""
         eq_phases = EquilibriumPhases(sample_equilibrium_data)
