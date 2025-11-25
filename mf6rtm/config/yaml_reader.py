@@ -1,10 +1,11 @@
 import yaml
 import numpy as np
+import warnings
 
 try:
     from phreeqcrm import yamlphreeqcrm
 except ImportError:
-    print("Warning: phreeqcrm not found.")
+    warnings.warn("phreeqcrm not found.", ImportWarning)
 
 def load_yaml_to_phreeqcrm(yaml_file_path):
     """
