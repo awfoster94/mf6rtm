@@ -1,19 +1,16 @@
 from pathlib import Path
 import os
-import sys
-import platform
 
-from datetime import datetime
 import pandas as pd
+
 import numpy as np
-import matplotlib.pyplot as plt
-# import tempfile
 import shutil 
 import pytest
 
 import flopy
-import mf6rtm
-from mf6rtm import utils, solver, mup3d
+from mf6rtm.simulation import solver
+from mf6rtm import utils, mup3d
+
 from autotest.conftest import make_dir_writable
 
 cwd = os.path.abspath(os.path.dirname(__file__))
@@ -552,7 +549,8 @@ def test01(prefix = 'test01'):
     solutionsdf = pd.read_csv(os.path.join(dataws,f"{prefix}_solutions.csv"), comment = '#',  index_col = 0)
     solutions = utils.solution_df_to_dict(solutionsdf)
     #get postfix file
-    equilibrium_phases = utils.equilibrium_phases_csv_to_dict(os.path.join(dataws, f'{prefix}_equilibrium_phases.csv'))
+    equilibrium_phases = pd.read_csv(os.path.join(dataws,f"{prefix}_equilibrium_phases.csv"))
+    equilibrium_phases = utils.parse_equilibriums_dataframe(equilibrium_phases)
 
     sol_ic = 1
     #add solutions to clss
@@ -654,11 +652,11 @@ def test02(prefix = 'test02'):
     solutions = utils.solution_df_to_dict(solutionsdf)
 
     # get equilibrium phases file
-    equilibrium_phases = utils.equilibrium_phases_csv_to_dict(os.path.join(dataws, f'{prefix}_equilibrium_phases.csv'))
+    equilibrium_phases = pd.read_csv(os.path.join(dataws,f"{prefix}_equilibrium_phases.csv"))
+    equilibrium_phases["conc_mol_lb"] = [utils.concentration_volbulk_to_volwater(i, prsity)
+                                         for i in equilibrium_phases["conc_mol_l"].values]
+    equilibrium_phases = utils.parse_equilibriums_dataframe(equilibrium_phases)
 
-    for key, value in equilibrium_phases.items():
-        for k, v in value.items():
-            v[-1] = utils.concentration_volbulk_to_volwater( v[-1], prsity)
     #assign solutions to grid
     sol_ic = np.ones((nlay, nrow, ncol), dtype=float)
 
@@ -688,7 +686,7 @@ def test02(prefix = 'test02'):
 
     postfix = os.path.join(dataws, f'{prefix}_postfix.phqr')
     model.set_postfix(postfix)
-
+    model.set_config(reactive_externalio=True)
     model.initialize()
 
     wellchem = mup3d.ChemStress('wel')
@@ -761,13 +759,12 @@ def test03(prefix = 'test03'):
 
     # solutions = utils.solution_csv_to_dict(os.path.join(dataws,f"{prefix}_solutions.csv"))
     solutions = utils.solution_df_to_dict(solutionsdf)
+    # get equilibrium phases file
+    equilibrium_phases = pd.read_csv(os.path.join(dataws,f"{prefix}_equilibrium_phases.csv"))
+    equilibrium_phases["conc_mol_lb"] = [utils.concentration_volbulk_to_volwater(i, prsity)
+                                         for i in equilibrium_phases["conc_mol_l"].values]
+    equilibrium_phases = utils.parse_equilibriums_dataframe(equilibrium_phases)
 
-    equilibrium_phases = utils.equilibrium_phases_csv_to_dict(os.path.join(dataws, f'{prefix}_equilibrium_phases.csv'))
-
-    # equlibrium phases is a dictionary with keys as the phase number, values is another dictionary with phase name and an array of saturation indices as element 0 and concentrations as element 1. multiply the concentrations by 2
-    for key, value in equilibrium_phases.items():
-        for k, v in value.items():
-            v[-1] = utils.concentration_volbulk_to_volwater( v[-1], prsity)
     #assign solutions to grid
     sol_ic = np.ones((nlay, nrow, ncol), dtype=int)
 
@@ -880,9 +877,9 @@ def test04(prefix = 'test04'):
     solution.set_ic(sol_ic)
 
     excdf = pd.read_csv(os.path.join(dataws,f"{prefix}_exchange.csv"), comment = '#',  index_col = 0)
-    exchangerdic = utils.solution_df_to_dict(excdf)
-
-    exchanger = mup3d.ExchangePhases(exchangerdic)
+    exchange_dict = {0:excdf.T.to_dict(index='comp')}
+    exchanger = mup3d.ExchangePhases(exchange_dict)
+    exchanger.set_equilibrate_solutions([1])
     exchanger.set_ic(np.ones((nlay, nrow, ncol), dtype=float))
 
     #create model class
@@ -988,9 +985,15 @@ def test05(prefix = 'test05'):
 
     #exchange
     excdf = pd.read_csv(os.path.join(dataws,f"{prefix}_exchange.csv"), comment = '#',  index_col = 0)
-    exchangerdic = utils.solution_df_to_dict(excdf)
+    excdf = pd.read_csv(os.path.join(dataws,f"{prefix}_exchange.csv"), comment = '#',  index_col = 0)
+    # exchangerdic = utils.solution_df_to_dict(excdf)
+    excdf.columns=[0,1,2,3]
+    exchanger_dict = excdf.to_dict()
+    for k, subdict in exchanger_dict.items():
+        for key in subdict:
+            subdict[key] = {'m0': subdict[key]}
 
-    exchanger = mup3d.ExchangePhases(exchangerdic)
+    exchanger = mup3d.ExchangePhases(exchanger_dict)
     exchanger_ic = np.ones((nlay, nrow, ncol), dtype=float)
     exchanger_ic[0,0,:4] = 1
     exchanger_ic[0,0,4:8] = 2
@@ -1003,15 +1006,18 @@ def test05(prefix = 'test05'):
     exchanger.set_equilibrate_solutions(eq_solutions)
 
     #kinetics
-    kinedic = utils.kinetics_phases_csv_to_dict(os.path.join(dataws,f"{prefix}_kinetic_phases.csv"))
+    df = pd.read_csv(os.path.join(dataws,f"{prefix}_kinetic_phases.csv"))
+    kin_phases=utils.parse_kinetics_dataframe(df)
     orgsed_form = 'Orgc_sed -1.0 C 1.0' 
-    kinedic[1]['Orgc_sed'].append(orgsed_form)
-    kinetics = mup3d.KineticPhases(kinedic)
+    kin_phases[1]['Orgc_sed']['formula'] = orgsed_form
+    kinetics = mup3d.KineticPhases(kin_phases)
     kinetics.set_ic(1)
 
-    #eq phases
-    equilibriums = utils.equilibrium_phases_csv_to_dict(os.path.join(dataws,f"{prefix}_equilibrium_phases.csv"))
-    equilibriums = mup3d.EquilibriumPhases(equilibriums)
+    #equilibrium phases
+    df = pd.read_csv(os.path.join(dataws,f"{prefix}_equilibrium_phases.csv"))
+    equ_phases = utils.parse_equilibriums_dataframe(df)
+
+    equilibriums = mup3d.EquilibriumPhases(equ_phases)
     equilibriums.set_ic(1)
 
     #surfaces
@@ -1023,9 +1029,9 @@ def test05(prefix = 'test05'):
     #create model class
     model = mup3d.Mup3d(prefix,solution, nlay, nrow, ncol)
 
-    # set model workspace
+    #set model workspace
     modelwd = os.path.join(cwd, f'{prefix}')
-    model.set_wd(os.path.join(modelwd))
+    model.set_wd(modelwd)
 
     # #set database
     database = os.path.join(databasews, f'ex5.dat')
@@ -1138,7 +1144,7 @@ def run_yaml(prefix):
     '''Run model from yaml file'''
     wd = os.path.join(prefix)
     #run the model
-    mf6rtm.solve(wd)
+    mup3d.solve(wd)
     return
 
 def run_test(prefix, model, mf6sim, *args, **kwargs):
@@ -1171,8 +1177,8 @@ def run_test(prefix, model, mf6sim, *args, **kwargs):
     # return
 
 
-# if __name__ == '__main__':
-#     test01()
+if __name__ == '__main__':
+    test01()
 #     test01_yaml()
 
 
