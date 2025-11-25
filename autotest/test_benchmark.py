@@ -677,7 +677,7 @@ def test02(prefix = 'test02'):
     modelwd = os.path.join(cwd, f'{prefix}')
     model.set_wd(os.path.join(modelwd))
 
-    #set datamup3d
+    #set database
     database = os.path.join(databasews, f'pht3d_datab_walter1994.dat')
     model.set_database(database)
 
