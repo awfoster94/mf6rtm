@@ -74,7 +74,10 @@ class Regenerator:
         for key, value in self.config.items():
             if key not in ['reactive', 'emulator']:
                 print(key)
-                names = self.config[key]['names'] if 'names' in self.config[key] else ValueError(f"Key '{key}' does not have 'names' attribute.")
+                if 'names' in self.config[key]:
+                    names = self.config[key]['names']
+                else:
+                    raise ValueError(f"Key '{key}' does not have 'names' attribute.")
                 for nme in names:
                     for lay in range(self.nlay):
                         file_path = os.path.join(self.wd, f"{key}.{nme}.m0.layer{lay+1}.txt")
