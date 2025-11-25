@@ -25,13 +25,15 @@ dependencies:
   # - geojson
   # - pyvista # interface for Visualization Toolkit (VTK)
   - jupytext # for pairing examples with jupyter notebooks
+  - pyemu # Environmental Model Uncertainty w/ PEST/PEST++ 
 
-
-  # PhreeqcRM and dependencies
+  # MF6RTM packages & dependencies
+  # - mf6rtm # installed via conda develop
   - phreeqcrm
+  - toml
 
   # PyData packages not included above
-  - geopandas
+  - pandas
   - numpy
   - matplotlib
 
