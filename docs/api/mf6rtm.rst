@@ -7,6 +7,7 @@ Subpackages
 .. toctree::
    :maxdepth: 4
    :caption: Subpackages:
+
    mf6rtm.config
    mf6rtm.io
    mf6rtm.mup3d
