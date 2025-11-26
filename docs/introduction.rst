@@ -82,6 +82,6 @@ For development installation:
 
 .. code-block:: bash
 
-   git clone https://github.com/your-org/mf6rtm.git
+   git clone https://github.com/p-ortega/mf6rtm.git
    cd mf6rtm
    pip install -e .
