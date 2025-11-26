@@ -1,0 +1,20 @@
+# .readthedocs.yaml
+version: 2
+
+# Sphinx settings
+sphinx:
+  configuration: docs/conf.py
+
+# Build environment
+build:
+  os: ubuntu-22.04
+  tools:
+    python: "3.13"
+
+# Install your package with docs extras
+python:
+  install:
+    - method: pip
+      path: .
+      extra_requirements:
+        - docs
