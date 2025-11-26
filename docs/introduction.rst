@@ -46,7 +46,7 @@ This integration enables users to perform rigorous assessment of the impact of p
 Code Structure
 ------------
 
-mf6rtm is organized into several subpackages, but there two main components, that the user will interact with the most: solver and mup3d.
+mf6rtm is organized into several subpackages, but there are two main components, that the user will interact with the most: solver and mup3d.
 
 * **Solver**: This component manages the coupling between MODFLOW-6 and PHREEQC, handling data exchange, time-stepping, and overall simulation control. 
 * **Mup3d**: This module acts as a pre- and post-processor for preparing input files for the reactive transport simulations, especially the chemistry inputs for PHREEQCRM (think FloPy for MODFLOW-6 + PHREEQC).
