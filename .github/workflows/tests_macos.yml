@@ -1,13 +1,13 @@
 name: mf6rtm continuous integration - macOS
 
 on:
-  # schedule:
-  #   - cron: '0 8 * * *' # run at 8 AM UTC (12 am PST)
+  schedule:
+    - cron: '0 8 * * *' # run at 8 AM UTC (12 am PST)
   push:
     branches:
       - develop
   pull_request:
-    branches: [main, develop, feature/externalio]
+    branches: [main, develop, feature/**]
 
 jobs:
   test:
