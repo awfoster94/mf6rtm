@@ -1065,7 +1065,7 @@ def test05(prefix = 'test05'):
                                         top, botm, wel_spd, chdspd, prsity, k11, k33, dispersivity, icelltype, hclose, 
                                         strt, rclose, relax, nouter, ninner)
     
-    run_test(prefix, model, mf6sim, treshold = 0.02)
+    run_test(prefix, model, mf6sim, test_cli=True, treshold = 0.02)
 
 
 def get_test_dirs():
@@ -1147,12 +1147,17 @@ def run_yaml(prefix):
     mup3d.solve(wd)
     return
 
-def run_test(prefix, model, mf6sim, *args, **kwargs):
+def run_test(prefix, model, mf6sim, test_cli = False, *args, **kwargs):
     for nthread in [1, 8]:
         #try to run the model if success print test passed
-        model.run(reactive=False)
-        success = model.run(reactive=True, nthread=nthread)
-        assert success
+        if test_cli:
+            #run from cli
+            import subprocess as sp
+            sp.run(['mf6rtm'])
+        else:
+            model.run(reactive=False)
+            success = model.run(reactive=True, nthread=nthread)
+            assert success
 
         # treshold = args.get('treshold', 0.01)
         benchmarkdf = get_benchmark_results(prefix)

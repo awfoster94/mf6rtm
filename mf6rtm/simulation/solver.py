@@ -6,7 +6,7 @@ import os
 import numpy as np
 
 from datetime import datetime
-from typing import Any, Union
+from typing import Any, Union, Optional
 from pathlib import Path
 
 from PIL import Image
@@ -729,8 +729,15 @@ def mrbeaker() -> str:
 
     return mrbeaker
 
-def run_cmd():
-    # get the current directory
-    cwd = os.getcwd()
+def run_cmd(cwd: Optional[os.PathLike] = None) -> None:
+    """Console entrypoint compatibility wrapper.
+
+    When used as a console script the entrypoint calls `mf6rtm:run_cmd`
+    with no arguments. Allow `cwd` to be optional and default to the
+    current working directory.
+    """
+    if cwd is None:
+        cwd = os.getcwd()
+
     # run the solve function
     solve(cwd)
