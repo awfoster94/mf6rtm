@@ -1152,8 +1152,11 @@ def run_test(prefix, model, mf6sim, test_cli = False, *args, **kwargs):
         #try to run the model if success print test passed
         if test_cli:
             #run from cli
+            bwd = os.getcwd()
+            os.chdir(model.wd)
             import subprocess as sp
             sp.run(['mf6rtm'])
+            os.chdir(bwd)
         else:
             model.run(reactive=False)
             success = model.run(reactive=True, nthread=nthread)
