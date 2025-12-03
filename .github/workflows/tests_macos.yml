@@ -44,7 +44,21 @@ jobs:
 
     - name: Install Modflow executables
       uses: modflowpy/install-modflow-action@v1
+      with:
+        subset: mf6,libmf6,gridgen
 
+    - name: Make libmf6.dylib visible to macOS loader
+      run: |
+        echo "Searching for libmf6..."
+        find "$MODFLOW_BIN_PATH" -name "libmf6.dylib"
+
+        # Copy libmf6 to a macOS-allowed search folder
+        mkdir -p $HOME/lib
+        find "$MODFLOW_BIN_PATH" -name "libmf6.dylib" -exec cp {} $HOME/lib \;
+
+        echo "Copied libmf6 to $HOME/lib"
+
+      shell: bash
     - name: Add executables directory to path
       shell: bash
       run: |

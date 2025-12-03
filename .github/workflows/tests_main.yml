@@ -31,6 +31,8 @@ jobs:
 
     - name: Install Modflow executables
       uses: modflowpy/install-modflow-action@v1
+      with:
+        subset: mf6,libmf6,gridgen
 
     - name: Add executables directory to path
       shell: bash
