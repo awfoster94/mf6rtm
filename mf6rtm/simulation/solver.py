@@ -64,9 +64,20 @@ def prep_to_run(wd:os.PathLike) -> tuple[os.PathLike,os.PathLike]:
     # check if wd exists
     assert os.path.exists(wd), f"Path {wd} not found"
     # check if file starting with libmf6 exists
-    dll = [f for f in os.listdir(wd) if f.startswith("libmf6")]
-    assert len(dll) == 1, "libmf6 dll not found in model directory"
-    dll = os.path.join(wd, "libmf6")
+    dll_files = [f for f in os.listdir(wd) if f.startswith("libmf6")]
+    if len(dll_files) == 0:
+        # libmf6 not in model directory, assume it's available in system PATH/env
+        print("libmf6 not found in model directory, assuming it is available in PATH/env")
+        dll = "libmf6"
+    elif len(dll_files) == 1:
+        # exactly one libmf6 found, use it
+        dll = os.path.join(wd, dll_files[0])
+    else:
+        # multiple libmf6 files found - ambiguous
+        raise AssertionError(
+            f"Multiple libmf6 files found in model directory: {dll_files}. "
+            "Please keep only one version."
+        )
 
     config = check_config_file(wd)
     check_nam_files(wd)
