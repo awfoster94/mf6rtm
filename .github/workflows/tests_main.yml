@@ -23,10 +23,22 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python-version }}
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install tox tox-gh-actions
+
+    - name: Install Modflow executables
+      uses: modflowpy/install-modflow-action@v1
+
+    - name: Add executables directory to path
+      shell: bash
+      run: |
+        echo "$MODFLOW_BIN_PATH" >> $GITHUB_PATH
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+        echo $GITHUB_PATH
+
     - name: Test with tox
       run: tox -e py${{ matrix.python-version }}
       env:

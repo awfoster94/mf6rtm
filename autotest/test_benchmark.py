@@ -253,7 +253,7 @@ def build_mf6_1d_injection_model(mup3d, nper, tdis_rc, length_units, time_units,
         )
 
     sim.write_simulation()
-    utils.prep_bins(sim_ws, src_path=src_path, get_only=['mf6', 'libmf6'])
+    # utils.prep_bins(sim_ws, src_path=src_path, get_only=['mf6', 'libmf6'])
     
     return sim
 
@@ -495,7 +495,7 @@ def build_mf6_2d_model(mup3d, nper, tdis_rc, length_units, time_units, nlay, nro
         )
 
     sim.write_simulation()
-    utils.prep_bins(sim_ws, src_path=src_path, get_only=['mf6', 'libmf6'])
+    # utils.prep_bins(sim_ws, src_path=src_path, get_only=['mf6', 'libmf6'])
     
     return sim
 

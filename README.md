@@ -29,17 +29,47 @@ Most options for each phreeqc block can be passed by adding list with options. H
 All dependencies and executables are included in this repo. This package extensively uses [modflowapi](https://github.com/MODFLOW-USGS/modflowapi) and [phreeqcrm](https://github.com/usgs-coupled/phreeqcrm)
 
 ## Installation
-The package can be installed through pip as:
+The package can be installed via pip:
 
 ```commandline
 pip install mf6rtm
 ```
+
+We recommend creating a dedicated environment to manage all dependencies and executables required to run mf6rtm. For example, using mamba with an environment file:
+
+```commandline
+mamba env create -f env.yml
+mamba activate mf6rtm-dev
+```
+
+After activating the environment, install the MODFLOW6 executables into the environment's bin directory:
+
+```commandline
+pip install modflow-devtools
+get-modflow --subset mf6,libmf6,gridgen :python
+```
+
+Once installed, the executables in `envs/[env-name]/bin` will be automatically invoked whenever mf6rtm runs within the environment. These are typically the latest stable versions. 
+
+If you need to use custom or older versions of mf6 (e.g., for running PESTPP on an HPC cluster), place them in a separate directory and use the provided utility to copy the executables to the appropriate directory.
+
+```Python
+from mf6rtm import utils
+
+utils.prep_bins(model_dir, src_path=path_to_bins)
+
+```
+### Running the benchmark notebooks
+We have provided some benchmarks in the form of Jupyter notebooks. We have also included the executables needed to run them out of the box. Nevertheless, they can also be run using the executables downloaded with modflow-devtools.
+
 ## Developing
-We recommend forking and cloning a local version of this repo. A development Conda environment is provided in the `env.yml` file, which should install all required dependencies to run tests and modify the package on the fly. To install the environment, use the following command:
+We recommend forking and cloning a local version of this repo. A development environment is provided in the `env.yml` file, which should install all required dependencies to run tests and modify the package on the fly. To install the environment, use the following command:
 
 ```commandline
 conda env create -f env.yml
 ```
+
+The rest of the development dependencies, especially for the testing suite is located in the requirements-dev file. We have also provided some dependencies with flopy and pyemu inside the repo but feel free to use your own distro.
 
 ## Funding
 The developing of mf6rtm was kindly funded and supported by [Intera, Inc](https://www.intera.com).
