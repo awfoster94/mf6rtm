@@ -29,17 +29,17 @@ jobs:
         python -m pip install --upgrade pip
         pip install tox tox-gh-actions
 
-    - name: Install Modflow executables
-      uses: modflowpy/install-modflow-action@v1
-      with:
-        subset: mf6,libmf6,gridgen
+    # - name: Install Modflow executables
+    #   uses: modflowpy/install-modflow-action@v1
+    #   with:
+    #     subset: mf6,libmf6,gridgen
 
-    - name: Add executables directory to path
-      shell: bash
-      run: |
-        echo "$MODFLOW_BIN_PATH" >> $GITHUB_PATH
-        echo "$HOME/.local/bin" >> $GITHUB_PATH
-        echo $GITHUB_PATH
+    # - name: Add executables directory to path
+    #   shell: bash
+    #   run: |
+    #     echo "$MODFLOW_BIN_PATH" >> $GITHUB_PATH
+    #     echo "$HOME/.local/bin" >> $GITHUB_PATH
+    #     echo $GITHUB_PATH
 
     - name: Test with tox
       run: tox -e py${{ matrix.python-version }}
