@@ -58,6 +58,8 @@ jobs:
         mf6 --version
 
     - name: Test with tox
-      run: tox
+      run: |
+        export PATH="$MODFLOW_BIN_DIR:$PATH"
+        tox
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
