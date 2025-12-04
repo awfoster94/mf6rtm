@@ -37,8 +37,8 @@ jobs:
     - name: Add executables directory to path
       shell: bash
       run: |
-        echo "$MODFLOW_BIN_PATH" >> $GITHUB_ENV
-        echo "$HOME/.local/bin" >> $GITHUB_ENV
+        echo "MODFLOW_BIN_PATH=$MODFLOW_BIN_PATH" >> $GITHUB_ENV
+        echo "PATH=$HOME/.local/bin:$PATH" >> $GITHUB_ENV
 
     - name: Test with tox
       run: tox -e py${{ matrix.python-version }}
