@@ -35,7 +35,7 @@ jobs:
         subset: mf6,libmf6,gridgen
 
     - name: Add executables directory to path
-      shell: bash
+      shell: bash -l {0}
       run: |
         echo "MODFLOW_BIN_PATH=$MODFLOW_BIN_PATH" >> $GITHUB_ENV
         echo "PATH=$HOME/.local/bin:$PATH" >> $GITHUB_ENV
