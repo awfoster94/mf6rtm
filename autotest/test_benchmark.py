@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import shutil 
 import pytest
-
+import platform
 import flopy
 from mf6rtm.simulation import solver
 from mf6rtm import utils, mup3d
@@ -16,7 +16,24 @@ from autotest.conftest import make_dir_writable
 cwd = os.path.abspath(os.path.dirname(__file__))
 dataws = os.path.join(cwd, "data")
 databasews = os.path.join(cwd, "database")
-src_path = os.path.join(cwd,'bin')
+
+bin_path = "bin"
+exe_ext = ""
+env_path = Path(os.environ.get("CONDA_PREFIX", None))
+assert env_path is not None, (
+    "autotest script must be run from the mf6adj Conda environment"
+)
+
+if "linux" in platform.platform().lower():
+    lib_ext = ".so"
+elif "darwin" in platform.platform().lower() or "macos" in platform.platform().lower():
+    lib_ext = ".dylib"
+else:
+    bin_path = "Scripts"
+    lib_ext = ".dll"
+    exe_ext = ".exe"
+lib_name = env_path / f"{bin_path}/libmf6{lib_ext}"
+src_path = env_path / f"{bin_path}"
 
 def build_mf6_1d_injection_model(mup3d, nper, tdis_rc, length_units, time_units, nlay, nrow, ncol, delr, delc,
                                  top, botm, wel_spd, chdspd, prsity, k11, k33, dispersivity, icelltype, hclose, 
@@ -253,7 +270,7 @@ def build_mf6_1d_injection_model(mup3d, nper, tdis_rc, length_units, time_units,
         )
 
     sim.write_simulation()
-    # utils.prep_bins(sim_ws, src_path=src_path, get_only=['mf6', 'libmf6'])
+    utils.prep_bins(sim_ws, src_path=src_path, get_only=['mf6', 'libmf6'])
     
     return sim
 
@@ -495,7 +512,7 @@ def build_mf6_2d_model(mup3d, nper, tdis_rc, length_units, time_units, nlay, nro
         )
 
     sim.write_simulation()
-    # utils.prep_bins(sim_ws, src_path=src_path, get_only=['mf6', 'libmf6'])
+    utils.prep_bins(sim_ws, src_path=src_path, get_only=['mf6', 'libmf6'])
     
     return sim
 
