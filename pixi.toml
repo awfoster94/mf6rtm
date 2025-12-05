@@ -1,4 +1,4 @@
-[workspace]
+[project]
 name = "mf6rtm"
 description = "MODFLOW 6 reactive transport module"
 channels = ["conda-forge"]
