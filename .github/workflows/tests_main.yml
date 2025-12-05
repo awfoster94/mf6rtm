@@ -79,15 +79,17 @@ jobs:
         fi
 
 
-    # - name: Add executables directory to PATH
-    #   shell: bash
-    #   run: |
-    #     # Compute directory
-    #     MODFLOW_BIN_DIR=$(dirname "$MODFLOW_BIN_PATH")
-    #     echo "MODFLOW_BIN_DIR=$MODFLOW_BIN_DIR" >> $GITHUB_ENV
+    - name: Add executables directory to PATH
+      shell: bash
+      run: |
+        echo "Using MODFLOW_BIN_PATH=$MODFLOW_BIN_PATH"
+        MODFLOW_BIN_DIR="$MODFLOW_BIN_PATH"
 
-    #     # Add directory to PATH
-    #     echo "PATH=$MODFLOW_BIN_DIR:$PATH" >> $GITHUB_ENV
+        echo "MODFLOW_BIN_DIR=$MODFLOW_BIN_DIR" >> $GITHUB_ENV
+        echo "$MODFLOW_BIN_DIR" >> $GITHUB_PATH
+
+        echo "Final PATH after export:"
+        echo "$MODFLOW_BIN_DIR:$PATH"
 
 
     - name: Test with tox
