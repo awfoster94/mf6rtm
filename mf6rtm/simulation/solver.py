@@ -67,6 +67,7 @@ def prep_to_run(wd:os.PathLike, libname: Path | None = None) -> tuple[os.PathLik
     dll_files = [f for f in os.listdir(wd) if f.startswith("libmf6")]
     if len(dll_files) == 0:
         # no libmf6 in directory
+        print("Libname", libname)
         if libname is None:
             # fallback to system PATH
             print("libmf6 not found in model directory, assuming it is available in PATH/env")
