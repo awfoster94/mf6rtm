@@ -109,7 +109,7 @@ def prep_to_run(wd:os.PathLike, libname: Path | None = None) -> tuple[os.PathLik
 def solve(wd:os.PathLike, reactive: Union[bool, None] = None, nthread: int = 1, libname: str = None) -> bool:
     """Wrapper to prepare and call solve functions"""
 
-    mf6rtm = initialize_interfaces(wd, nthread=nthread)
+    mf6rtm = initialize_interfaces(wd, nthread=nthread, libname=libname)
     if reactive is not None and isinstance(reactive, bool) and reactive != mf6rtm.reactive:
         print(
                 f"Mode changed from "
