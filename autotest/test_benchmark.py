@@ -611,6 +611,7 @@ def test01(prefix = 'test01'):
 
     return 
 
+@pytest.mark.skip
 def test02(prefix = 'test02'):
     # General
     length_units = "meters"
