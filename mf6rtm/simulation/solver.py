@@ -77,6 +77,7 @@ def prep_to_run(wd:os.PathLike, libname: Path | None = None) -> tuple[os.PathLik
             lib_path = Path(libname)
             if lib_path.exists():
                 dll = str(lib_path)
+                assert 0==1
             else:
                 raise FileNotFoundError(f"Provided libmf6 path does not exist: {libname}")
     elif len(dll_files) == 1:
