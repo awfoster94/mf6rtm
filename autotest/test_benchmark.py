@@ -1067,6 +1067,17 @@ def test05(prefix = 'test05'):
     
     run_test(prefix, model, mf6sim, test_cli=True, treshold = 0.02)
 
+def test_mf6_bin():
+    '''Test that mf6 binary is available'''
+    import subprocess as sp
+    try:
+        result = sp.run(['mf6', '--version'], capture_output=True, text=True, check=True)
+        print("MODFLOW 6 binary is available.")
+        print("Version info:", result.stdout)
+    except FileNotFoundError:
+        pytest.skip("MODFLOW 6 binary 'mf6' not found. Skipping test.")
+    except sp.CalledProcessError as e:
+        pytest.fail(f"Error occurred while checking MODFLOW 6 binary: {e}")
 
 def get_test_dirs():
     '''Get test directories'''
