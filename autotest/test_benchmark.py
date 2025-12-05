@@ -21,7 +21,7 @@ bin_path = "bin"
 exe_ext = ""
 env_path = Path(os.environ.get("CONDA_PREFIX", None))
 assert env_path is not None, (
-    "autotest script must be run from the mf6adj Conda environment"
+    "autotest script must be run from the mf6rt environment"
 )
 
 if "linux" in platform.platform().lower():
@@ -270,7 +270,7 @@ def build_mf6_1d_injection_model(mup3d, nper, tdis_rc, length_units, time_units,
         )
 
     sim.write_simulation()
-    utils.prep_bins(sim_ws, src_path=src_path, get_only=['mf6', 'libmf6'])
+    utils.prep_bins(sim_ws, src_path=src_path, get_only=['mf6', 'libmf6'], add_platform=False)
     
     return sim
 
@@ -512,7 +512,7 @@ def build_mf6_2d_model(mup3d, nper, tdis_rc, length_units, time_units, nlay, nro
         )
 
     sim.write_simulation()
-    utils.prep_bins(sim_ws, src_path=src_path, get_only=['mf6', 'libmf6'])
+    utils.prep_bins(sim_ws, src_path=src_path, get_only=['mf6', 'libmf6'], add_platform=False)
     
     return sim
 
