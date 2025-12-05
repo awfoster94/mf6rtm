@@ -48,11 +48,14 @@ jobs:
         subset: mf6,libmf6,gridgen
 
     - name: Add executables directory to PATH
-      shell: bash -l {0}
+      shell: bash
       run: |
-        MODFLOW_BIN_DIR=$(dirname "$MODFLOW_BIN_PATH")  # gets the directory
+        # Compute directory
+        MODFLOW_BIN_DIR=$(dirname "$MODFLOW_BIN_PATH")
         echo "MODFLOW_BIN_DIR=$MODFLOW_BIN_DIR" >> $GITHUB_ENV
-        # echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+        # Add directory to PATH
+        echo "PATH=$MODFLOW_BIN_DIR:$PATH" >> $GITHUB_ENV
 
         # Verify mf6 is accessible
         mf6 --version

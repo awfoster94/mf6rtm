@@ -34,11 +34,16 @@ jobs:
       with:
         subset: mf6,libmf6,gridgen
 
-    - name: Add executables directory to path
-      shell: bash -l {0}
+    - name: Add executables directory to PATH
+      shell: bash
       run: |
-        echo "MODFLOW_BIN_PATH=$MODFLOW_BIN_PATH" >> $GITHUB_ENV
-        echo "PATH=$HOME/.local/bin:$PATH" >> $GITHUB_ENV
+        # Compute directory
+        MODFLOW_BIN_DIR=$(dirname "$MODFLOW_BIN_PATH")
+        echo "MODFLOW_BIN_DIR=$MODFLOW_BIN_DIR" >> $GITHUB_ENV
+
+        # Add directory to PATH
+        echo "PATH=$MODFLOW_BIN_DIR:$PATH" >> $GITHUB_ENV
+
 
     - name: Test with tox
       run: tox -e py${{ matrix.python-version }}
