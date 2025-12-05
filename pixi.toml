@@ -1,0 +1,49 @@
+[workspace]
+name = "mf6rtm"
+description = "MODFLOW 6 reactive transport module"
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+
+[dependencies]
+python = ">=3.10,<3.14"
+pandas = "*"
+geopandas = "*"
+numpy = "*"
+matplotlib = "*"
+pytest = "*"
+pytest-cov = "*"
+modflow-devtools = "*"
+pip = "*"
+flaky = "*"
+coverage = "*"
+coveralls = "*"
+flake8 = "*"
+jupytext = "*"
+nbconvert = "*"
+nbformat = "*"
+ipykernel = "*"
+phreeqcrm = "*"
+flopy = "*"
+modflowapi = "*"
+toml = "*"
+
+# MODFLOW feature placeholder
+[feature.modflow.dependencies]
+# MODFLOW binaries installed via tasks
+
+[environments]
+#test = { features = ["modflow"], solve-group = "default" }
+py310 = { features = ["modflow"], solve-group = "default" }
+py311 = { features = ["modflow"], solve-group = "default" }
+py312 = { features = ["modflow"], solve-group = "default" }
+py313 = { features = ["modflow"], solve-group = "default" }
+
+[tasks]
+install-modflow = { cmd = "get-modflow --subset mf6,libmf6,gridgen :python" }
+install-package = { cmd = "pip install -e ." }
+test = { cmd = "pytest -vv --basetemp=.pixi/tmp", depends-on = ["install-modflow", "install-package"] }
+test-cov = { cmd = "pytest -vv --cov=mf6rtm --cov-report=term-missing", depends-on = ["install-modflow", "install-package"] }
+coveralls = { cmd = "coveralls --service=github", depends-on = ["test-cov"] }
+lint = { cmd = "flake8 mf6rtm autotest" }
+qa = { depends-on = ["lint", "test"] }
+clean = { cmd = "rm -rf .pixi/tmp .pytest_cache .coverage htmlcov" }
