@@ -51,8 +51,8 @@ jobs:
       shell: bash -l {0}
       run: |
         MODFLOW_BIN_DIR=$(dirname "$MODFLOW_BIN_PATH")  # gets the directory
-        echo "$MODFLOW_BIN_DIR" >> $GITHUB_PATH
-        echo "$HOME/.local/bin" >> $GITHUB_PATH
+        echo "MODFLOW_BIN_DIR=$MODFLOW_BIN_DIR" >> $GITHUB_ENV
+        # echo "$HOME/.local/bin" >> $GITHUB_PATH
 
         # Verify mf6 is accessible
         mf6 --version
