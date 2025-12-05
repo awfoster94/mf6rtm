@@ -270,7 +270,7 @@ def build_mf6_1d_injection_model(mup3d, nper, tdis_rc, length_units, time_units,
         )
 
     sim.write_simulation()
-    utils.prep_bins(sim_ws, src_path=src_path, get_only=['mf6', 'libmf6'], add_platform=False)
+    # utils.prep_bins(sim_ws, src_path=src_path, get_only=['mf6', 'libmf6'], add_platform=False)
     
     return sim
 
@@ -512,7 +512,7 @@ def build_mf6_2d_model(mup3d, nper, tdis_rc, length_units, time_units, nlay, nro
         )
 
     sim.write_simulation()
-    utils.prep_bins(sim_ws, src_path=src_path, get_only=['mf6', 'libmf6'], add_platform=False)
+    # utils.prep_bins(sim_ws, src_path=src_path, get_only=['mf6', 'libmf6'], add_platform=False)
     
     return sim
 
@@ -1186,8 +1186,8 @@ def run_test(prefix, model, mf6sim, test_cli = False, *args, **kwargs):
             sp.run(['mf6rtm'])
             os.chdir(bwd)
         else:
-            model.run(reactive=False)
-            success = model.run(reactive=True, nthread=nthread)
+            model.run(reactive=False, libname=lib_name)
+            success = model.run(reactive=True, nthread=nthread, libname=lib_name)
             assert success
 
         # treshold = args.get('treshold', 0.01)

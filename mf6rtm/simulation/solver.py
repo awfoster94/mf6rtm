@@ -47,7 +47,7 @@ def check_nam_files(wd:os.PathLike) -> tuple[os.PathLike,os.PathLike]:
     # assert "gwf.nam" in nam, "gwf.nam file not found in model directory"
     return os.path.join(wd, "mfsim.nam") #, os.path.join(wd, "gwf.nam")
 
-def prep_to_run(wd:os.PathLike) -> tuple[os.PathLike,os.PathLike]:
+def prep_to_run(wd:os.PathLike, libname: str = None) -> tuple[os.PathLike,os.PathLike]:
     """
     Prepares the model to run by checking if the model directory (wd) contains the necessary files
     and returns the path to the yaml file (phreeqcrm) and the dll file (mf6 api)
@@ -65,10 +65,12 @@ def prep_to_run(wd:os.PathLike) -> tuple[os.PathLike,os.PathLike]:
     assert os.path.exists(wd), f"Path {wd} not found"
     # check if file starting with libmf6 exists
     dll_files = [f for f in os.listdir(wd) if f.startswith("libmf6")]
-    if len(dll_files) == 0:
+    if len(dll_files) == 0 and libname is None:
         # libmf6 not in model directory, assume it's available in system PATH/env
         print("libmf6 not found in model directory, assuming it is available in PATH/env")
         dll = "libmf6"
+    elif libname is not None and len(dll_files) == 0:
+        dll = libname
     elif len(dll_files) == 1:
         # exactly one libmf6 found, use it
         dll = os.path.join(wd, dll_files[0])
@@ -97,7 +99,7 @@ def prep_to_run(wd:os.PathLike) -> tuple[os.PathLike,os.PathLike]:
     ), f"{yamlfile} not found in model directory {wd}"
     return yamlfile, dll
 
-def solve(wd:os.PathLike, reactive: Union[bool, None] = None, nthread: int = 1) -> bool:
+def solve(wd:os.PathLike, reactive: Union[bool, None] = None, nthread: int = 1, libname: str = None) -> bool:
     """Wrapper to prepare and call solve functions"""
 
     mf6rtm = initialize_interfaces(wd, nthread=nthread)
@@ -116,10 +118,10 @@ def solve(wd:os.PathLike, reactive: Union[bool, None] = None, nthread: int = 1) 
 
 
 # TODO: we should maybe move this into the Mf6API as an alternative constructor
-def initialize_interfaces(wd:os.PathLike, nthread: int = 1) -> Mf6API:
+def initialize_interfaces(wd:os.PathLike, nthread: int = 1, libname: str = None) -> Mf6API:
     """Function to initialize the interfaces for modflowapi and phreeqcrm and returns the mf6rtm object"""
 
-    yamlfile, dll = prep_to_run(wd)
+    yamlfile, dll = prep_to_run(wd, libname=libname)
 
     if nthread > 1:
         # set nthreds to nthread
