@@ -36,12 +36,12 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}    
       run: |
-        pixi run install-modflow
+        pixi run -e py${{ matrix.python-version }} install-modflow
 
     - name: Run tests
       shell: pixi run bash -e {0}
       run: |
-        pytest -vv
+        pytest -vv -s
     # - name: Run tests
     #   run: pixi run -e py${{ matrix.python-version }} test
     #   env:
