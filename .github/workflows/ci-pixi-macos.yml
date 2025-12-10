@@ -27,7 +27,7 @@ jobs:
         cache: true
         environments: py${{ matrix.python-version }}
 
-    - name: Install MODFLOW and run tests
-      run: pixi exec -e py${{ matrix.python-version }} bash -c "get-modflow --repo modflow6-nightly-build :python && pip install -e . && pytest -v -s --tb=short"
+    - name: Run tests
+      run: pixi run -e py${{ matrix.python-version }} test
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
