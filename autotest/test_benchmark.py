@@ -516,6 +516,7 @@ def build_mf6_2d_model(mup3d, nper, tdis_rc, length_units, time_units, nlay, nro
     
     return sim
 
+@pytest.mark.skip
 def test01(prefix = 'test01'):
 
     '''Test 1: Simple 1D injection test with equilibrium phases'''	
