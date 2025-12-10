@@ -28,10 +28,14 @@ jobs:
         cache: true
         environments: py${{ matrix.python-version }}
 
-    - name: Install project environment
+    - name: Install environment
       run: pixi install -e py${{ matrix.python-version }}
 
     - name: Run tests
-      run: pixi run -e py${{ matrix.python-version }} test
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      shell: pixi run bash -e {0}
+      run: |
+        pytest -vv -s --tb=long
+    # - name: Run tests
+    #   run: pixi run -e py${{ matrix.python-version }} test
+    #   env:
+    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
