@@ -1176,25 +1176,26 @@ def run_yaml(prefix):
     return
 
 def run_test(prefix, model, mf6sim, test_cli = False, libname = None, *args, **kwargs):
-    for nthread in [1]:
+    # for nthread in [1]:
         #try to run the model if success print test passed
-        if test_cli:
-            #run from cli
-            bwd = os.getcwd()
-            os.chdir(model.wd)
-            import subprocess as sp
-            sp.run(['mf6rtm'])
-            os.chdir(bwd)
-        else:
-            model.run(reactive=False, libname=libname)
-            success = model.run(reactive=True, nthread=nthread, libname=libname)
-            assert success
+    nthread = 1
+    if test_cli:
+        #run from cli
+        bwd = os.getcwd()
+        os.chdir(model.wd)
+        import subprocess as sp
+        sp.run(['mf6rtm'])
+        os.chdir(bwd)
+    else:
+        model.run(reactive=False, libname=libname)
+        success = model.run(reactive=True, nthread=nthread, libname=libname)
+        assert success
 
-        # treshold = args.get('treshold', 0.01)
-        benchmarkdf = get_benchmark_results(prefix)
-        testdf = get_test_results(model)
+    # treshold = args.get('treshold', 0.01)
+    benchmarkdf = get_benchmark_results(prefix)
+    testdf = get_test_results(model)
 
-        compare_results(benchmarkdf, testdf, *args, **kwargs)
+    compare_results(benchmarkdf, testdf, *args, **kwargs)
 
     return
 
