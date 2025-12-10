@@ -32,16 +32,18 @@ jobs:
       run: pixi install -e py${{ matrix.python-version }}
 
 
-    - name: Install executables
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}    
-      run: |
-        pixi run -e py${{ matrix.python-version }} install-modflow
+    # - name: Install executables
+    #   env:
+    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}    
+    #   run: |
+    #     pixi run -e py${{ matrix.python-version }} install-modflow
 
     - name: Run tests
       shell: pixi run bash -e {0}
       run: |
+        pixi run -e py${{ matrix.python-version }} install-modflow
         pytest -vv -s
+
     # - name: Run tests
     #   run: pixi run -e py${{ matrix.python-version }} test
     #   env:
