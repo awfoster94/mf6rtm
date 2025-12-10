@@ -37,6 +37,7 @@ jobs:
       run: pixi run -e py${{ matrix.python-version }} pytest -v -s --tb=short
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        PIXI_NO_PROFILE: 1
 
   lint:
     runs-on: ubuntu-latest
@@ -74,6 +75,7 @@ jobs:
       run: pixi run -e py310 pytest -v -s --cov=mf6rtm --cov-report=term-missing --tb=short
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        PIXI_NO_PROFILE: 1
 
     - name: Upload to Coveralls
       run: pixi run -e py310 coveralls

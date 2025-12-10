@@ -37,3 +37,4 @@ jobs:
       run: pixi run -e py${{ matrix.python-version }} pytest -v -s --tb=short
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        PIXI_NO_PROFILE: 1
