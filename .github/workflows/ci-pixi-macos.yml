@@ -27,14 +27,12 @@ jobs:
         cache: true
         environments: py${{ matrix.python-version }}
 
-    - name: Install MODFLOW
-      run: pixi run -e py${{ matrix.python-version }} get-modflow --repo modflow6-nightly-build :python
-
-    - name: Install package
-      run: pixi run -e py${{ matrix.python-version }} pip install -e .
-
-    - name: Run tests
-      run: pixi run -e py${{ matrix.python-version }} pytest -v -s --tb=short
+    - name: Install MODFLOW and run tests
+      run: |
+        pixi shell -e py${{ matrix.python-version }} <<'EOF'
+        get-modflow --repo modflow6-nightly-build :python
+        pip install -e .
+        pytest -v -s --tb=short
+        EOF
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        PIXI_NO_PROFILE: 1
