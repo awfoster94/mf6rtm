@@ -52,8 +52,8 @@ py313 = { features = ["py313", "modflow"], solve-group = "py313" }
 [tasks]
 install-package = { cmd = "pip install -e ." }
 install-modflow = { cmd = "get-modflow --repo modflow6-nightly-build :python" }
-test = { cmd = "COVERAGE_CORE=python pytest -vv -s -n=auto ", depends-on = ["install-modflow", "install-package"] }
-test-cov = { cmd = "pytest -vv -rA --cov=mf6rtm --cov-report=term-missing --tb=long", depends-on = ["install-modflow", "install-package"] }
+test = { cmd = "pytest -v -s --tb=short", depends-on = ["install-modflow", "install-package"] }
+test-cov = { cmd = "pytest -v -s --cov=mf6rtm --cov-report=term-missing --tb=short", depends-on = ["install-modflow", "install-package"] }
 coveralls = { cmd = "coveralls --service=github", depends-on = ["test-cov"] }
 lint = { cmd = "flake8 mf6rtm autotest" }
 qa = { depends-on = ["lint", "test"] }
