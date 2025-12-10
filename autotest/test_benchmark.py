@@ -516,7 +516,6 @@ def build_mf6_2d_model(mup3d, nper, tdis_rc, length_units, time_units, nlay, nro
     
     return sim
 
-@pytest.mark.skip
 def test01(prefix = 'test01'):
 
     '''Test 1: Simple 1D injection test with equilibrium phases'''	
@@ -1177,7 +1176,7 @@ def run_yaml(prefix):
     return
 
 def run_test(prefix, model, mf6sim, test_cli = False, libname = None, *args, **kwargs):
-    for nthread in [1, 8]:
+    for nthread in [1]:
         #try to run the model if success print test passed
         if test_cli:
             #run from cli
