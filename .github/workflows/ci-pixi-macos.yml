@@ -42,7 +42,7 @@ jobs:
       shell: pixi run bash -e {0}
       run: |
         pixi run -e py${{ matrix.python-version }} install-modflow
-        pytest -vv -s
+        pixi run -e py${{ matrix.python-version }} test
 
     # - name: Run tests
     #   run: pixi run -e py${{ matrix.python-version }} test
