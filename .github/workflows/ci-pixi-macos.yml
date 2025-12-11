@@ -31,33 +31,7 @@ jobs:
     - name: Install environment
       run: pixi install -e py${{ matrix.python-version }}
 
-
-    # - name: Install executables
-    #   env:
-    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}    
-    #   run: |
-    #     pixi run -e py${{ matrix.python-version }} install-modflow
-
-    # - name: Run tests
-    #   shell: pixi run bash -e {0}
-    #   run: |
-    #     pixi run -e py${{ matrix.python-version }} install-modflow
-    #     pixi run -e py${{ matrix.python-version }} test
-    #   env:
-    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    - name: Install MODFLOW
-      run: |
-        eval "$(pixi shell-hook -s bash -e py${{ matrix.python-version }})"
-        get-modflow --repo modflow6-nightly-build :python
-        
-    - name: Install and test
-      run: |
-        eval "$(pixi shell-hook -s bash -e py${{ matrix.python-version }})"
-        pip install -e .
-        pytest -v -s --tb=short
+    - name: Run tests
+      run: pixi run -e py${{ matrix.python-version }} test
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    # - name: Run tests
-    #   run: pixi run -e py${{ matrix.python-version }} test
-    #   env:
-    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
