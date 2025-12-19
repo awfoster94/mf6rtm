@@ -7,7 +7,7 @@ These Jupyter Notebooks run classic, well-know reference models using this MF6RT
 3. **Example 2: Walter 1994. 2D migration of AMD precipitation & dissolution fronts.** A two-dimensional version of Example 2.
 4. **Example 4: Parkhurst and Appelo 2013 (PHREEQC-3 Example 11) 1D Cation Exchange.** Cation exchange column flushing of a sodium-potassium nitrate solution with calcium chloride.
 5. **Example 5: Appelo 1998. Pyrite Oxidation**  Modelling of an oxidation experiment with marine pyrite-containing sediments.
-
+6. **Example 6: Parkhurst and Appelo 2013 (PHREEQC-3 Example 11) Cation Exchange.** 3D variant of Cation Exchange with DISV grid
 
 ## Install Development Environment
 
