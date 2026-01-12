@@ -938,7 +938,7 @@ class Mup3d(object):
         None
         """
         self._write_phreeqc_init_file()
-        if self.config.reactive_externalio:
+        if self.config.reactive['externalio']:
             self.write_internal_parameters()
             self.write_external_files_layered()
         self.save_config()

@@ -315,7 +315,6 @@ class Regenerator:
                                 merged_array = np.stack(valid_arrays, axis=0)
 
                                 # Reshape to grid dimensions
-                                # nlay, nrow, ncol = self.grid_shape
                                 reshaped_array = merged_array.reshape(self.grid_shape)
 
                                 file_data[key][nme] = reshaped_array
