@@ -46,21 +46,49 @@ class MF6RTMConfig:
         self._validate_tsteps()
 
     def _apply_defaults(self):
-        """Apply default values for any missing attributes."""
+        """Apply default values for any missing attributes (using nested dicts)."""
+
         defaults = {
-            'reactive_enabled': True,
-            'reactive_timing': 'all',
-            'reactive_tsteps': [],
-            'reactive_externalio': False,
-            'emulator_training_data': False,
-            'emulator_feature_variables': [],
-            'emulator_target_variables': [],
+            "reactive": {
+                "enabled": True,
+                "timing": "all",
+                "tsteps": [],
+                "externalio": False,
+            },
+            "emulator": {
+                "training_data": False,
+                "feature_variables": [],
+                "target_variables": [],
+            }
         }
 
-        # Apply defaults for any missing attributes
-        for key, default_value in defaults.items():
-            if not hasattr(self, key):
-                setattr(self, key, default_value)
+        for section, section_defaults in defaults.items():
+            # If the section (e.g. self.reactive) does not exist, create it
+            if not hasattr(self, section) or getattr(self, section) is None:
+                setattr(self, section, {})
+
+            # Now fill in missing keys
+            cfg_section = getattr(self, section)
+
+            for key, default_value in section_defaults.items():
+                cfg_section.setdefault(key, default_value)
+
+    # def _apply_defaults(self):
+    #     """Apply default values for any missing attributes."""
+    #     defaults = {
+    #         'reactive_enabled': True,
+    #         'reactive_timing': 'all',
+    #         'reactive_tsteps': [],
+    #         'reactive_externalio': False,
+    #         'emulator_training_data': False,
+    #         'emulator_feature_variables': [],
+    #         'emulator_target_variables': [],
+    #     }
+
+        # # Apply defaults for any missing attributes
+        # for key, default_value in defaults.items():
+        #     if not hasattr(self, key):
+        #         setattr(self, key, default_value)
 
     def add_new_configuration(self, **kwargs):
         """Add new configuration parameters dynamically."""
@@ -372,15 +400,15 @@ class MF6RTMConfig:
     def __str__(self):
         """Detailed string representation."""
         lines = [f"MF6RTM will run with the following configuration:"]
-        lines.append(f"  Reactive: {self.reactive_enabled}")
-        lines.append(f"  Reaction timing: {self.reactive_timing}")
-        lines.append(f"  External files flag: {self.reactive_externalio}")
-        lines.append(f"  Emulator flag: {self.emulator_training_data}")
-        if self.reactive_timing == 'user' and self.reactive_tsteps:
-            lines.append(f"  User-defined time steps ({len(self.reactive_tsteps)} total):")
-            for kper, kstp in sorted(self.reactive_tsteps):
+        lines.append(f"  Reactive: {self.reactive['enabled']}")
+        lines.append(f"  Reaction timing: {self.reactive['timing']}")
+        lines.append(f"  External files flag: {self.reactive['externalio']}")
+        lines.append(f"  Emulator flag: {self.emulator['training_data']}")
+        if self.reactive['timing'] == 'user' and self.reactive['tsteps']:
+            lines.append(f"  User-defined time steps ({len(self.reactive['tsteps'])} total):")
+            for kper, kstp in sorted(self.reactive['tsteps']):
                 lines.append(f"    Period {kper}, Step {kstp}")
-        elif self.reactive_timing == 'all':
+        elif self.reactive['timing'] == 'all':
             lines.append("  Reactions calculated at all time steps")
 
         return '\n'.join(lines)
