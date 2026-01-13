@@ -42,8 +42,10 @@ class MF6RTMConfig:
         # Apply defaults for any missing attributes
         self._apply_defaults()
 
+    def _validate_config(self):
         self._validate_reaction_timing()
         self._validate_tsteps()
+        self.validated = True
 
     def _apply_defaults(self):
         """Apply default values for any missing attributes (using nested dicts)."""
@@ -111,6 +113,8 @@ class MF6RTMConfig:
         # error if self.reactive_tsteps is empty and timing is 'user'
         if self.reactive['timing'] == 'user' and len(self.reactive['tsteps']) == 0:
             raise ValueError("tsteps cannot be empty when reaction_timing is 'user'")
+        if self.reactive['timing'] == 'all' and len(self.reactive['tsteps']) > 0:
+            print("WARNING: Reactive time steps defined but timing set to 'all' instead of 'user'")
         normalized = []
         for i, tstep in enumerate(self.reactive['tsteps']):
             if not isinstance(tstep, (tuple, list)) or len(tstep) != 2:

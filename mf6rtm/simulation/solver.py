@@ -38,6 +38,9 @@ def check_config_file(wd: os.PathLike) -> tuple[os.PathLike, os.PathLike]:
         ), "mf6rtm.toml not found in model directory"
     config_file= os.path.join(wd, "mf6rtm.toml")
     config = MF6RTMConfig.from_toml_file(config_file)
+
+    # validate config values like timing and tsteps
+    config._validate_config()
     return config
 
 def check_nam_files(wd:os.PathLike) -> tuple[os.PathLike,os.PathLike]:
