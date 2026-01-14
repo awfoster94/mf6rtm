@@ -3,6 +3,9 @@ The MF6RTM (Modflow 6 Reactive Transport Model) package is a Python package
 for reactive transport modeling via the MODFLOW 6 and PhreeqcRM APIs.
 """
 
+__author__ = "Pablo Ortega"
+__version__ = "0.3.0"
+
 from . import mup3d
 from . import simulation
 from .utils import utils
