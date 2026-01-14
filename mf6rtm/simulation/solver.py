@@ -63,6 +63,7 @@ def prep_to_run(wd:os.PathLike, libname: Path | None = None) -> tuple[os.PathLik
     """
     # check if wd exists
     assert os.path.exists(wd), f"Path {wd} not found"
+
     # check if file starting with libmf6 exists
     dll_files = [f for f in os.listdir(wd) if f.startswith("libmf6")]
     if len(dll_files) == 0:
@@ -75,12 +76,14 @@ def prep_to_run(wd:os.PathLike, libname: Path | None = None) -> tuple[os.PathLik
         else:
             # use provided Path or string
             lib_path = Path(libname)
+            print("Using provided libmf6 path:", lib_path)
             if lib_path.exists():
                 dll = str(lib_path)
             else:
                 raise FileNotFoundError(f"Provided libmf6 path does not exist: {libname}")
     elif len(dll_files) == 1:
-        dll = str(wd / dll_files[0])
+        print(f"Using libmf6 found in model directory: {dll_files[0]}")
+        dll = str(Path(wd) / dll_files[0])
     else:
         # multiple DLLs found
         raise AssertionError(
