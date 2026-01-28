@@ -56,5 +56,4 @@ test = { cmd = "pytest -v", depends-on = ["install-modflow", "install-package"] 
 test-cov = { cmd = "pytest -v --cov=mf6rtm --cov-report=term-missing", depends-on = ["install-modflow", "install-package"] }
 coveralls = { cmd = "coveralls --service=github", depends-on = ["test-cov"] }
 lint = { cmd = "flake8 mf6rtm" }
-qa = { depends-on = ["lint", "test"] }
 clean = { cmd = "rm -rf .pixi/tmp .pytest_cache .coverage htmlcov" }
