@@ -1,17 +1,12 @@
-from pathlib import Path
 import os
-
-import pandas as pd
-
-import numpy as np
 import shutil 
 import pytest
 import platform
 import flopy
-from mf6rtm.simulation import solver
+import pandas as pd
+import numpy as np
 from mf6rtm import utils, mup3d
-
-from autotest.conftest import make_dir_writable
+from pathlib import Path
 
 cwd = os.path.abspath(os.path.dirname(__file__))
 dataws = os.path.join(cwd, "data")
@@ -1188,6 +1183,8 @@ def run_test(prefix, model, test_cli = False, libname = None, *args, **kwargs):
         #run from cli
         bwd = os.getcwd()
         os.chdir(model.wd)
+        #copy from env
+        shutil.copy2(lib_name, f"./libmf6{lib_ext}")
         import subprocess as sp
         sp.run(['mf6rtm'])
         os.chdir(bwd)
