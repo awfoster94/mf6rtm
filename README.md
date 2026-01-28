@@ -38,32 +38,7 @@ The package can be installed via pip:
 pip install mf6rtm
 ```
 
-### Recommended: Installation with Pixi (Preferred)
-
-We recommend using [pixi](https://pixi.sh) for managing dependencies and executables. Pixi automatically handles all dependencies, including MODFLOW executables:
-
-```commandline
-# Install pixi (one-time setup)
-curl -fsSL https://pixi.sh/install.sh | bash
-
-# Clone the repository
-git clone https://github.com/p-ortega/mf6rtm.git
-cd mf6rtm
-
-# Install all dependencies and MODFLOW executables
-pixi install
-
-# Run tests to verify installation
-pixi run test
-```
-
-Pixi automatically:
-- Creates isolated environments for different Python versions
-- Installs all dependencies (conda and pip packages)
-- Downloads and configures MODFLOW executables
-- Handles library paths for your platform
-
-### Alternative: Manual Installation with Conda/Mamba
+### Manual Installation with Conda/Mamba
 
 If you prefer conda/mamba, create a dedicated environment:
 
@@ -83,7 +58,7 @@ Once installed, the executables in `envs/[env-name]/bin` will be automatically i
 
 ### Custom MODFLOW Versions
 
-If you need custom or older versions of mf6 (e.g., for running PESTPP on an HPC cluster), place them in a separate directory and use the provided utility:
+If you need custom or older versions of mf6 (e.g., for running PESTPP on an HPC cluster), place them in a separate directory and use the provided utility to bring them to the model working directory:
 
 ```Python
 from mf6rtm import utils
@@ -119,11 +94,7 @@ pixi run lint
 # Test with specific Python version
 pixi run -e py311 test
 
-# Enter the development environment
-pixi shell
 ```
-
-See [PIXI_MIGRATION.md](PIXI_MIGRATION.md) for detailed pixi usage and migration information.
 
 ### With Conda/Mamba
 
