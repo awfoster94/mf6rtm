@@ -32,6 +32,7 @@ else:
     bin_path = "Scripts"
     lib_ext = ".dll"
     exe_ext = ".exe"
+
 lib_name = env_path / f"{bin_path}/libmf6{lib_ext}"
 src_path = env_path / f"{bin_path}"
 
@@ -607,7 +608,7 @@ def test01(prefix = 'test01'):
     mf6sim = build_mf6_1d_injection_model(model, nper, tdis_rc, length_units, time_units, nlay, nrow, ncol, delr, delc,
                                     top, botm, wel_spd, chdspd, prsity, k11, k33, dispersivity, icelltype, hclose, 
                                     strt, rclose, relax, nouter, ninner)
-    run_test(prefix, model, mf6sim, libname=lib_name)
+    run_test(prefix, model, libname=lib_name)
 
     return 
 
@@ -723,7 +724,7 @@ def test02(prefix = 'test02'):
     mf6sim = build_mf6_1d_injection_model(model, nper, tdis_rc, length_units, time_units, nlay, nrow, ncol, delr, delc,
                                     top, botm, wel_spd, chdspd, prsity, k11, k33, dispersivity, icelltype, hclose, 
                                     strt, rclose, relax, nouter, ninner)
-    run_test(prefix, model, mf6sim, libname=lib_name)
+    run_test(prefix, model, libname=lib_name)
 
 def test03(prefix = 'test03'):
     length_units = "meters"
@@ -832,7 +833,7 @@ def test03(prefix = 'test03'):
                                  top, botm, chdspd, prsity, k11, k33, dispersivity, disp_tr_vert,icelltype, hclose,
                                  strt, rclose, relax, nouter, ninner)
     
-    run_test(prefix, model, mf6sim, libname=lib_name)
+    run_test(prefix, model, libname=lib_name)
 
 
 def test04(prefix = 'test04'):
@@ -932,7 +933,7 @@ def test04(prefix = 'test04'):
                                     top, botm, wel_spd, chdspd, prsity, k11, k33, dispersivity, icelltype, hclose, 
                                     strt, rclose, relax, nouter, ninner)
     
-    run_test(prefix, model, mf6sim, libname=lib_name)
+    run_test(prefix, model, libname=lib_name)
 
 
 
@@ -1086,7 +1087,7 @@ def test05(prefix = 'test05'):
                                         top, botm, wel_spd, chdspd, prsity, k11, k33, dispersivity, icelltype, hclose, 
                                         strt, rclose, relax, nouter, ninner)
     
-    run_test(prefix, model, mf6sim, test_cli=True, libname=lib_name, treshold = 0.02)
+    run_test(prefix, model, test_cli=True, libname=lib_name, treshold = 0.02)
 
 def test_mf6_bin():
     '''Test that mf6 binary is available'''
@@ -1179,7 +1180,7 @@ def run_yaml(prefix):
     mup3d.solve(wd)
     return
 
-def run_test(prefix, model, mf6sim, test_cli = False, libname = None, *args, **kwargs):
+def run_test(prefix, model, test_cli = False, libname = None, *args, **kwargs):
     # for nthread in [1]:
         #try to run the model if success print test passed
     nthread = 1
