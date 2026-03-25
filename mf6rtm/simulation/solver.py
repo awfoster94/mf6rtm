@@ -420,13 +420,11 @@ class Mf6RTM(object):
 
 
     def _get_cdlbl_vect(self) -> np.ndarray[np.float64]:
-        """Get the concentration array from phreeqc bmi reshape to (ncomps, nxyz)"""
+        """Get the 1-D phreeqc concentration array and 
+        reshape for mf6 to (ncomps, nxyz) """
+        # TODO: Rename to "_get_conc", because it returns a conc-shaped array
         c_dbl_vect = self.phreeqcbmi.GetConcentrations()
-
-        conc = [
-            c_dbl_vect[i : i + self.nxyz] for i in range(0, len(c_dbl_vect), self.nxyz)
-        ]  # reshape array
-        # TODO: refactor to use np.reshape(), which is 2x faster
+        conc = np.reshape(c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz)) 
         return conc
 
     def _set_conc_at_current_kstep(self, c_dbl_vect: np.ndarray[np.float64]):
@@ -493,9 +491,7 @@ class Mf6RTM(object):
         ]
         c_dbl_vect[:, inactive_idx] = self.previous_iteration_conc[:, inactive_idx]
         c_dbl_vect = c_dbl_vect.flatten()
-        conc = [
-            c_dbl_vect[i : i + self.nxyz] for i in range(0, len(c_dbl_vect), self.nxyz)
-        ]
+        conc = np.reshape(c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz)) 
         return conc
 
     def _transfer_array_to_phreeqcrm(self) -> np.ndarray[np.float64]:
