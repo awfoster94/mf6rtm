@@ -420,40 +420,41 @@ class Mf6RTM(object):
 
 
     def _get_cdlbl_vect(self) -> np.ndarray[np.float64]:
-        """Get the 1-D phreeqc concentration array and 
-        reshape for mf6 to (ncomps, nxyz) """
-        # TODO: Rename to "_get_conc", because it returns a conc-shaped array
+        """Get the 1-D phreeqc concentration array with a length of ncomps*nxyz.
+        Returns: 1-D c_dbl_vect of length (ncomps*nxyz).
+        """
         c_dbl_vect = self.phreeqcbmi.GetConcentrations()
-        conc = np.reshape(c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz)) 
-        return conc
+        return c_dbl_vect
 
     def _set_conc_at_current_kstep(self, c_dbl_vect: np.ndarray[np.float64]):
-        """Saves the current concentration array to the object"""
+        """Saves the current concentration array from phreeqc to the object"""
         self.current_iteration_conc = np.reshape(
             c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz)
         )
 
-    def _set_conc_at_previous_kstep(self, c_dbl_vect: np.ndarray[np.float64]):
-        """Saves the current concentration array to the object"""
-        self.previous_iteration_conc = np.reshape(
-            c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz)
-        )
+    def _set_conc_at_previous_kstep(self, mf6_conc_array: np.ndarray[np.float64]):
+        """Saves the current concentration array from mf6 to the object"""
+        self.previous_iteration_conc = mf6_conc_array
 
-    def _transfer_array_to_mf6(self) -> np.ndarray[np.float64]:
-        """Transfer the concentration array to mf6"""
+    def _transfer_array_to_mf6(self) -> np.ndarray[np.float64, np.float64]:
+        """Transfer the concentration array from phreeqc to mf6 bmi.
+        Returns: 2D array of shape (ncomps, nxyz)
+        """
         c_dbl_vect = self._get_cdlbl_vect()
+        # reshape for mf6 to (ncomps, nxyz)
+        mf6_conc_array = np.reshape(c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz)) 
 
         # check if reactive cells were skipped due to small changes from transport and replace with previous conc
         if self._check_previous_conc_exists() and self._check_inactive_cells_exist(
             self.diffmask
         ):
-            c_dbl_vect = self._replace_inactive_cells(c_dbl_vect, self.diffmask)
+            mf6_conc_array = self._replace_inactive_cells(mf6_conc_array, self.diffmask)
         else:
             pass
 
         conc_dict = {}
         for i, c in enumerate(self.phreeqcbmi.components):
-            conc_dict[c] = c_dbl_vect[i]
+            conc_dict[c] = mf6_conc_array[i]
             # Set concentrations in mf6
             gwt_model_name = self.component_model_dict[c]
             if gwt_model_name.lower() == "charge":
@@ -466,7 +467,7 @@ class Mf6RTM(object):
                     f"{gwt_model_name.upper()}/X",
                     utils.concentration_l_to_m3(conc_dict[c]),
                 )
-        return c_dbl_vect
+        return mf6_conc_array
 
     def _check_previous_conc_exists(self) -> bool:
         """Function to replace inactive cells in the concentration array"""
@@ -491,11 +492,13 @@ class Mf6RTM(object):
         ]
         c_dbl_vect[:, inactive_idx] = self.previous_iteration_conc[:, inactive_idx]
         c_dbl_vect = c_dbl_vect.flatten()
-        conc = np.reshape(c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz)) 
-        return conc
+        mf6_conc_array = np.reshape(c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz)) 
+        return mf6_conc_array
 
     def _transfer_array_to_phreeqcrm(self) -> np.ndarray[np.float64]:
-        """Transfer the concentration array to phreeqc bmi"""
+        """Transfer the concentration array from mf6 to phreeqc bmi.  
+        Returns: 1-D c_dbl_vect of length (ncomps*nxyz)
+        """
         mf6_conc_array = []
         for c in self.phreeqcbmi.components:
             if c.lower() == "charge":
@@ -615,9 +618,9 @@ class Mf6RTM(object):
                     self.diffmask = diffmask
                 # solve reactions
                 self.phreeqcbmi._solve_phreeqcrm(dt, diffmask=self.diffmask)
-                c_dbl_vect = self._transfer_array_to_mf6()
+                mf6_conc_array = self._transfer_array_to_mf6()
 
-                self._set_conc_at_previous_kstep(c_dbl_vect)
+                self._set_conc_at_previous_kstep(mf6_conc_array)
 
             self.mf6api.finalize_time_step()
             ctime = self._set_ctime()  # update the current time tracking
