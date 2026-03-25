@@ -9,3 +9,4 @@ nbconvert == 7.17.0
 ipykernel == 6.29.4
 coverage
 coveralls
+modflow-devtools
