@@ -442,7 +442,7 @@ class Mf6RTM(object):
         """
         c_dbl_vect = self._get_cdlbl_vect()
         # reshape for mf6 to (ncomps, nxyz)
-        mf6_conc_array = np.reshape(c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz)) 
+        mf6_conc_array = np.reshape(c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz))
 
         # check if reactive cells were skipped due to small changes from transport and replace with previous conc
         if self._check_previous_conc_exists() and self._check_inactive_cells_exist(
@@ -492,11 +492,11 @@ class Mf6RTM(object):
         ]
         c_dbl_vect[:, inactive_idx] = self.previous_iteration_conc[:, inactive_idx]
         c_dbl_vect = c_dbl_vect.flatten()
-        mf6_conc_array = np.reshape(c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz)) 
+        mf6_conc_array = np.reshape(c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz))
         return mf6_conc_array
 
     def _transfer_array_to_phreeqcrm(self) -> np.ndarray[np.float64]:
-        """Transfer the concentration array from mf6 to phreeqc bmi.  
+        """Transfer the concentration array from mf6 to phreeqc bmi.
         Returns: 1-D c_dbl_vect of length (ncomps*nxyz)
         """
         mf6_conc_array = []
