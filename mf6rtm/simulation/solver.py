@@ -6,7 +6,7 @@ import os
 import numpy as np
 
 from datetime import datetime
-from typing import Any, Union, Optional
+from typing import Any, Union, Optional, Tuple
 from pathlib import Path
 
 from PIL import Image
@@ -193,8 +193,10 @@ class Mf6RTM(object):
             Filename for the output, default is "sout.csv".
         reactive : bool
             Flag indicating if the model is reactive, default is True.
-        epsaqu : float
-            ??Epsaqueous value??, initialized to 0.0.
+        threshold : float
+            Previously "epsaqu"?, initialized to 0.0.
+            Appears to be the relative difference in component concentraitons to set the "diffmask"
+            that turns off reactions in upcomping timestep.
         fixed_components : Any
             Fixed components, default is None.
         get_selected_output_on : bool
@@ -216,7 +218,7 @@ class Mf6RTM(object):
         self.phreeqcbmi = phreeqcbmi
         self.charge_offset = 0.0
         self.wd = Path(wd)
-        self.epsaqu = 0.0
+        self.threshold = 1e-15
         self.fixed_components = None
         self.selected_output = SelectedOutput(self)
 
@@ -420,20 +422,22 @@ class Mf6RTM(object):
 
 
     def _get_cdlbl_vect(self) -> np.ndarray[np.float64]:
-        """Get the 1-D phreeqc concentration array with a length of ncomps*nxyz.
-        Returns: 1-D c_dbl_vect of length (ncomps*nxyz).
+        """Get the 1D phreeqc concentration array with a length of ncomps*nxyz.
+        Returns: 1D c_dbl_vect of length (ncomps*nxyz).
         """
         c_dbl_vect = self.phreeqcbmi.GetConcentrations()
         return c_dbl_vect
 
     def _set_conc_at_current_kstep(self, c_dbl_vect: np.ndarray[np.float64]):
-        """Saves the current concentration array from phreeqc to the object"""
+        """Saves the current 1D concentration array from phreeqc to the mf6rtm object
+        as a 2D array of shape (ncomps, nxyz)
+        """
         self.current_iteration_conc = np.reshape(
             c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz)
         )
 
     def _set_conc_at_previous_kstep(self, mf6_conc_array: np.ndarray[np.float64]):
-        """Saves the current concentration array from mf6 to the object"""
+        """Saves the current concentration array from mf6 to the mf6rtm object"""
         self.previous_iteration_conc = mf6_conc_array
 
     def _transfer_array_to_mf6(self) -> np.ndarray[np.float64, np.float64]:
@@ -485,7 +489,7 @@ class Mf6RTM(object):
         diffmask: np.ndarray[np.float64],
     ) -> np.ndarray[np.float64]:
         """Function to replace inactive cells in the concentration array"""
-        c_dbl_vect = np.reshape(c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz))
+        # c_dbl_vect = np.reshape(c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz))
         # get inactive cells
         inactive_idx = [
             utils.get_indices(0, diffmask) for k in range(self.phreeqcbmi.ncomps)
@@ -495,9 +499,9 @@ class Mf6RTM(object):
         mf6_conc_array = np.reshape(c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz))
         return mf6_conc_array
 
-    def _transfer_array_to_phreeqcrm(self) -> np.ndarray[np.float64]:
-        """Transfer the concentration array from mf6 to phreeqc bmi.
-        Returns: 1-D c_dbl_vect of length (ncomps*nxyz)
+    def _transfer_array_to_phreeqcrm(self) -> np.ndarray[Tuple[Any,Any],np.float64]:
+        """Transfer the 2D concentration array (ncomps, nxyz) from mf6 to phreeqc bmi.
+        Returns: 1D c_dbl_vect of length (ncomps*nxyz)
         """
         mf6_conc_array = []
         for c in self.phreeqcbmi.components:
@@ -611,9 +615,7 @@ class Mf6RTM(object):
                     diffmask = get_conc_change_mask(
                         self.current_iteration_conc,
                         self.previous_iteration_conc,
-                        self.phreeqcbmi.ncomps,
-                        self.nxyz,
-                        treshold=self.epsaqu,
+                        threshold=self.threshold,
                     )
                     self.diffmask = diffmask
                 # solve reactions
@@ -674,25 +676,29 @@ def get_inactive_idx(arr: np.ndarray, val: float = 1e30):
 
 
 def get_conc_change_mask(
-    ci: np.ndarray[np.float64],
-    ck: np.ndarray[np.float64],
-    ncomp: int,
-    nxyz: int,
-    treshold: float = 1e-10,
+    ci: np.ndarray[Tuple[Any, Any], np.float64], # current_iteration_conc: 2D (ncomps, nxyz)
+    ck: np.ndarray[Tuple[Any, Any], np.float64], # previous_iteration_conc: 2D (ncomps, nxyz)
+    threshold: float = 1e-15, # relative precision of a float64
 ) -> np.ndarray[np.float64]:
-    """Function to get the active-inactive cell mask for concentration change to inform phreeqc which cells to update"""
-    # reshape arrays to 2D (nxyz, ncomp)
-    ci = ci.reshape(nxyz, ncomp)
-    ck = ck.reshape(nxyz, ncomp) + 1e-30
-
+    """Function to get the active-inactive cell mask for concentration change due to transport
+    to inform phreeqc which cells to update.
+    Parameters:
+    ci: current_iteration_conc: 2D array (ncomps, nxyz)
+    ck: previous_iteration_conc: 2D (ncomps, nxyz)
+    Returns:
+    diffmask: 1D array of size nxyz with zeros for inactive cells
+    """
     # get the difference between the two arrays and divide by ci
-    diff = np.abs((ci - ck.reshape(-1 * nxyz, ncomp)) / ci) < treshold
-    diff = np.where(diff, 0, 1)
-    diff = diff.sum(axis=1)
+    relative_change = np.abs(np.divide(
+        (ci - ck), ci, out=np.zeros_like(ci, dtype=float), where=ci!=0
+    )) # avoid division by zero. NOTE: change if truncating is implemented
+    diff_boolean = relative_change < threshold
+    diff_ones = np.where(diff_boolean, 0, 1)
+    diff_sum = diff_ones.sum(axis=0) # Sum over all components in grid
 
-    # where values <0 put -1 else 1
-    diff = np.where(diff == 0, 0, 1)
-    return diff
+    # If any component shows a change, set to 1 to calculate reactions
+    diffmask = np.where(diff_sum == 0, 0, 1)
+    return diffmask
 
 
 def longest_common_substring(strings):
