@@ -187,6 +187,10 @@ class Mf6RTM(object):
             The PHREEQC BMI instance.
         charge_offset : float
             Offset for charge, initialized to 0.0.
+        min_concentration : float
+            Floor value applied to non-charge component concentrations before
+            passing to PhreeqcRM. Replaces negative (and near-zero) values.
+            Default is 1e-30. Set via set_min_concentration().
         wd :os.PathLike
             The working directory path.
         sout_fname : str
@@ -217,8 +221,9 @@ class Mf6RTM(object):
         self.mf6api = mf6api
         self.phreeqcbmi = phreeqcbmi
         self.charge_offset = 0.0
+        self.min_concentration = 1e-80
         self.wd = Path(wd)
-        self.threshold = 1e-15
+        self.threshold = 1e-10
         self.fixed_components = None
         self.selected_output = SelectedOutput(self)
 
@@ -330,6 +335,18 @@ class Mf6RTM(object):
         time_units = self.get_time_units_from_mf6()
         self.time_conversion = 1.0 / time_units_dict[time_units]
         self.phreeqcbmi.SetTimeConversion(self.time_conversion)
+
+    def set_min_concentration(self, min_concentration: float) -> None:
+        """Set the floor value for non-charge concentrations passed to PhreeqcRM.
+
+        Parameters
+        ----------
+        min_concentration : float
+            Any non-charge concentration below this value will be replaced with
+            this value before calling SetConcentrations. Use a small positive
+            number (e.g. 1e-30) to avoid PHREEQC divide-by-zero errors.
+        """
+        self.min_concentration = min_concentration
 
     def _create_component_model_dict(self)-> tuple[dict[str, str], list[str]]:
         """
@@ -485,58 +502,36 @@ class Mf6RTM(object):
 
     def _replace_inactive_cells(
         self,
-        c_dbl_vect: np.ndarray[np.float64],
+        mf6_conc_array: np.ndarray[Tuple[Any, Any], np.float64],
         diffmask: np.ndarray[np.float64],
-    ) -> np.ndarray[np.float64]:
-        """Function to replace inactive cells in the concentration array"""
-        # c_dbl_vect = np.reshape(c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz))
+    ) -> np.ndarray[Tuple[Any, Any], np.float64]:
+        """Function to replace inactive cells in the 2D concentration array"""
         # get inactive cells
         inactive_idx = [
             utils.get_indices(0, diffmask) for k in range(self.phreeqcbmi.ncomps)
         ]
-        c_dbl_vect[:, inactive_idx] = self.previous_iteration_conc[:, inactive_idx]
-        c_dbl_vect = c_dbl_vect.flatten()
-        mf6_conc_array = np.reshape(c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz))
+        mf6_conc_array[:, inactive_idx] = self.previous_iteration_conc[:, inactive_idx]
         return mf6_conc_array
 
-    def _transfer_array_to_phreeqcrm(self) -> np.ndarray[Tuple[Any,Any],np.float64]:
-        """Transfer the 2D concentration array (ncomps, nxyz) from mf6 to phreeqc bmi.
+    def _transfer_array_to_phreeqcrm(self) -> np.ndarray[Tuple[Any], np.float64]:
+        """Get the 2D concentration array (ncomps, nxyz) from mf6, convert units,
+        reshape to 1D (ncomps*nxyz), and transfer to phreeqc bmi.
         Returns: 1D c_dbl_vect of length (ncomps*nxyz)
         """
-        mf6_conc_array = []
-        for c in self.phreeqcbmi.components:
+        mf6_conc_array = np.empty((self.phreeqcbmi.ncomps, self.nxyz), dtype=np.float64)
+        for i, c in enumerate(self.phreeqcbmi.components):
+            arr = self.mf6api.get_value(
+                    self.mf6api.get_var_address("X", self.component_model_dict[c].upper())
+                )
             if c.lower() == "charge":
-                mf6_conc_array.append(
-                    utils.concentration_m3_to_l(
-                        self.mf6api.get_value(
-                            self.mf6api.get_var_address(
-                                "X",
-                                f"{self.component_model_dict[c].upper()}",
-                            )
-                        )
-                        - self.charge_offset
-                    )
-                )
-
+                arr -= self.charge_offset
             else:
-                mf6_conc_array.append(
-                    utils.concentration_m3_to_l(
-                        self.mf6api.get_value(
-                            self.mf6api.get_var_address(
-                                "X",
-                                f"{self.component_model_dict[c].upper()}",
-                            )
-                        )
-                    )
-                )
-        c_dbl_vect = np.reshape(mf6_conc_array, self.nxyz * self.phreeqcbmi.ncomps)
+                np.clip(arr, self.min_concentration, None, out=arr)
+            mf6_conc_array[i] = arr
+
+        c_dbl_vect = utils.concentration_m3_to_l(mf6_conc_array.ravel())
         self.phreeqcbmi.SetConcentrations(c_dbl_vect)
-
-        # set the kper and kstp
-        self.phreeqcbmi._get_kper_kstp_from_mf6api(
-            self.mf6api
-        )  # FIXME: calling this func here is not ideal
-
+        # self.phreeqcbmi._get_kper_kstp_from_mf6api(self.mf6api)  # FIXME: calling this func here is not ideal
         return c_dbl_vect
 
     def _solve(self) -> bool:
@@ -599,6 +594,7 @@ class Mf6RTM(object):
             # check_reactive_kstp()
             if self.is_reactive_tstep():
                 c_dbl_vect = self._transfer_array_to_phreeqcrm()
+                self.phreeqcbmi._get_kper_kstp_from_mf6api(self.mf6api) # Moved from `_transfer_array_to_phreeqcrm()`
                 self._set_conc_at_current_kstep(c_dbl_vect)
 
                 # Export ML feature arrays if option is on
