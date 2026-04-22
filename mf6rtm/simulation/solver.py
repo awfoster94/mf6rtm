@@ -445,50 +445,42 @@ class Mf6RTM(object):
         c_dbl_vect = self.phreeqcbmi.GetConcentrations()
         return c_dbl_vect
 
-    def _set_conc_at_current_kstep(self, c_dbl_vect: np.ndarray[np.float64]):
-        """Saves the current 1D concentration array from phreeqc to the mf6rtm object
+    def _set_conc_at_current_kstep(self, mf6_conc_array: np.ndarray[tuple[int, int], np.float64]):
+        """Saves the current 2D concentration array retrieved from Modflow the mf6rtm object
         as a 2D array of shape (ncomps, nxyz)
         """
-        self.current_iteration_conc = np.reshape(
-            c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz)
-        )
+        self.current_iteration_conc = mf6_conc_array
 
-    def _set_conc_at_previous_kstep(self, mf6_conc_array: np.ndarray[np.float64]):
-        """Saves the current concentration array from mf6 to the mf6rtm object"""
+    def _set_conc_at_previous_kstep(self, mf6_conc_array: np.ndarray[tuple[int, int], np.float64]):
+        """Saves the previous 2D concentration array from mf6 to the mf6rtm object"""
         self.previous_iteration_conc = mf6_conc_array
 
     def _transfer_array_to_mf6(self) -> np.ndarray[np.float64, np.float64]:
-        """Transfer the concentration array from phreeqc to mf6 bmi.
+        """Get the 1D concentration array from phreeqc, convert units,
+        reshape to  2D (ncomps, nxyz), and trasnfer to mf6 bmi.
         Returns: 2D array of shape (ncomps, nxyz)
         """
         c_dbl_vect = self._get_cdlbl_vect()
-        # reshape for mf6 to (ncomps, nxyz)
-        mf6_conc_array = np.reshape(c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz))
+        mf6_conc_m3_array = np.reshape(
+            utils.concentration_l_to_m3(c_dbl_vect),
+            (self.phreeqcbmi.ncomps, self.nxyz)
+        )
 
-        # check if reactive cells were skipped due to small changes from transport and replace with previous conc
         if self._check_previous_conc_exists() and self._check_inactive_cells_exist(
             self.diffmask
         ):
-            mf6_conc_array = self._replace_inactive_cells(mf6_conc_array, self.diffmask)
-        else:
-            pass
+            mf6_conc_m3_array = self._replace_inactive_cells(
+                mf6_conc_m3_array, self.diffmask
+            )
 
-        conc_dict = {}
-        for i, c in enumerate(self.phreeqcbmi.components):
-            conc_dict[c] = mf6_conc_array[i]
-            # Set concentrations in mf6
-            gwt_model_name = self.component_model_dict[c]
-            if gwt_model_name.lower() == "charge":
-                self.mf6api.set_value(
-                    f"{gwt_model_name.upper()}/X",
-                    utils.concentration_l_to_m3(conc_dict[c]) + self.charge_offset,
-                )
-            else:
-                self.mf6api.set_value(
-                    f"{gwt_model_name.upper()}/X",
-                    utils.concentration_l_to_m3(conc_dict[c]),
-                )
-        return mf6_conc_array
+        for i, component in enumerate(self.phreeqcbmi.components):
+            gwt_model_name = self.component_model_dict[component].upper()
+            concs = mf6_conc_m3_array[i]
+            if component.lower() == "charge":
+                concs += self.charge_offset
+            self.mf6api.set_value(f"{gwt_model_name}/X", concs)
+
+        return mf6_conc_m3_array
 
     def _check_previous_conc_exists(self) -> bool:
         """Function to replace inactive cells in the concentration array"""
@@ -502,9 +494,9 @@ class Mf6RTM(object):
 
     def _replace_inactive_cells(
         self,
-        mf6_conc_array: np.ndarray[Tuple[Any, Any], np.float64],
+        mf6_conc_array: np.ndarray[tuple[int, int], np.float64],
         diffmask: np.ndarray[np.float64],
-    ) -> np.ndarray[Tuple[Any, Any], np.float64]:
+    ) -> np.ndarray[tuple[int, int], np.float64]:
         """Function to replace inactive cells in the 2D concentration array"""
         # get inactive cells
         inactive_idx = [
@@ -516,23 +508,28 @@ class Mf6RTM(object):
     def _transfer_array_to_phreeqcrm(self) -> np.ndarray[Tuple[Any], np.float64]:
         """Get the 2D concentration array (ncomps, nxyz) from mf6, convert units,
         reshape to 1D (ncomps*nxyz), and transfer to phreeqc bmi.
-        Returns: 1D c_dbl_vect of length (ncomps*nxyz)
+        Returns: 1D c_dbl_vect of length (ncomps*nxyz), 2D conc array from mf6
         """
-        mf6_conc_array = np.empty((self.phreeqcbmi.ncomps, self.nxyz), dtype=np.float64)
-        for i, c in enumerate(self.phreeqcbmi.components):
-            arr = self.mf6api.get_value(
-                    self.mf6api.get_var_address("X", self.component_model_dict[c].upper())
-                )
-            if c.lower() == "charge":
-                arr -= self.charge_offset
+        mf6_conc_m3_array = np.empty((self.phreeqcbmi.ncomps, self.nxyz), dtype=np.float64)
+        for i, component in enumerate(self.phreeqcbmi.components):
+            gwt_model_name = self.component_model_dict[component].upper()
+            concs = self.mf6api.get_value(f"{gwt_model_name}/X")
+            if component.lower() == "charge":
+                concs -= self.charge_offset
             else:
-                np.clip(arr, self.min_concentration, None, out=arr)
-            mf6_conc_array[i] = arr
+                below = concs < utils.concentration_l_to_m3(self.min_concentration)
+                if below.any():
+                    print(
+                        f"  [{component}] {below.sum()} cell(s) below "
+                        f"min_concentration (min={concs[below].min():.2e}); "
+                        f"clipping to {self.min_concentration:.2e}"
+                    )
+                np.clip(concs, self.min_concentration, None, out=concs)
+            mf6_conc_m3_array[i] = concs
 
-        c_dbl_vect = utils.concentration_m3_to_l(mf6_conc_array.ravel())
+        c_dbl_vect = utils.concentration_m3_to_l(mf6_conc_m3_array.ravel())
         self.phreeqcbmi.SetConcentrations(c_dbl_vect)
-        # self.phreeqcbmi._get_kper_kstp_from_mf6api(self.mf6api)  # FIXME: calling this func here is not ideal
-        return c_dbl_vect
+        return c_dbl_vect, mf6_conc_m3_array
 
     def _solve(self) -> bool:
         """Alias for the solve method to provide backward compatibility"""
@@ -593,17 +590,19 @@ class Mf6RTM(object):
             self.get_saturation_from_mf6()
             # check_reactive_kstp()
             if self.is_reactive_tstep():
-                c_dbl_vect = self._transfer_array_to_phreeqcrm()
-                self.phreeqcbmi._get_kper_kstp_from_mf6api(self.mf6api) # Moved from `_transfer_array_to_phreeqcrm()`
-                self._set_conc_at_current_kstep(c_dbl_vect)
+                c_dbl_vect, mf6_conc_m3_array = self._transfer_array_to_phreeqcrm()
+                self.phreeqcbmi._get_kper_kstp_from_mf6api(self.mf6api) 
+                            # Moved from `_transfer_array_to_phreeqcrm()`
+                self._set_conc_at_current_kstep(mf6_conc_m3_array)
 
                 # Export ML feature arrays if option is on
                 if self.ml_output:
-                    self.selected_output.write_ml_arrays(self.current_iteration_conc,
-                                                    self.kiter,
-                                                    add_var_names=self.selected_output.feat_var,
-                                                    fname='_features.csv'
-                                                )
+                    self.selected_output.write_ml_arrays(
+                        self.current_iteration_conc,
+                        self.kiter,
+                        add_var_names=self.selected_output.feat_var,
+                        fname='_features.csv'
+                    )
 
                 if ctime == 0.0:
                     self.diffmask = np.ones(self.nxyz)
@@ -616,9 +615,9 @@ class Mf6RTM(object):
                     self.diffmask = diffmask
                 # solve reactions
                 self.phreeqcbmi._solve_phreeqcrm(dt, diffmask=self.diffmask)
-                mf6_conc_array = self._transfer_array_to_mf6()
+                mf6_conc_m3_array = self._transfer_array_to_mf6()
 
-                self._set_conc_at_previous_kstep(mf6_conc_array)
+                self._set_conc_at_previous_kstep(mf6_conc_m3_array)
 
             self.mf6api.finalize_time_step()
             ctime = self._set_ctime()  # update the current time tracking
@@ -629,11 +628,12 @@ class Mf6RTM(object):
                 self.selected_output._append_to_soutdf_file()
                 # Export ML target arrays if option is on
                 if self.ml_output:
-                    self.selected_output.write_ml_arrays(self.previous_iteration_conc,
-                                            self.kiter,
-                                            add_var_names=self.selected_output.target_var,
-                                            fname='_targets.csv'
-                                                )
+                    self.selected_output.write_ml_arrays(
+                        self.previous_iteration_conc,
+                        self.kiter,
+                        add_var_names=self.selected_output.target_var,
+                        fname='_targets.csv',
+                    )
 
         sim_end = datetime.now()
         td = (sim_end - sim_start).total_seconds() / 60.0
@@ -672,21 +672,21 @@ def get_inactive_idx(arr: np.ndarray, val: float = 1e30):
 
 
 def get_conc_change_mask(
-    ci: np.ndarray[Tuple[Any, Any], np.float64], # current_iteration_conc: 2D (ncomps, nxyz)
-    ck: np.ndarray[Tuple[Any, Any], np.float64], # previous_iteration_conc: 2D (ncomps, nxyz)
+    ck: np.ndarray[tuple[int, int], np.float64], # current_iteration_conc: 2D (ncomps, nxyz)
+    ci: np.ndarray[tuple[int, int], np.float64], # previous_iteration_conc: 2D (ncomps, nxyz)
     threshold: float = 1e-15, # relative precision of a float64
 ) -> np.ndarray[np.float64]:
     """Function to get the active-inactive cell mask for concentration change due to transport
     to inform phreeqc which cells to update.
     Parameters:
-    ci: current_iteration_conc: 2D array (ncomps, nxyz)
-    ck: previous_iteration_conc: 2D (ncomps, nxyz)
+    ck: current_iteration_conc: 2D array (ncomps, nxyz)
+    ci: previous_iteration_conc: 2D array(ncomps, nxyz)
     Returns:
     diffmask: 1D array of size nxyz with zeros for inactive cells
     """
     # get the difference between the two arrays and divide by ci
     relative_change = np.abs(np.divide(
-        (ci - ck), ci, out=np.zeros_like(ci, dtype=float), where=ci!=0
+        (ck - ci), ck, out=np.zeros_like(ci, dtype=float), where=ci!=0
     )) # avoid division by zero. NOTE: change if truncating is implemented
     diff_boolean = relative_change < threshold
     diff_ones = np.where(diff_boolean, 0, 1)
