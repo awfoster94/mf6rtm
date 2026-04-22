@@ -591,7 +591,7 @@ class Mf6RTM(object):
             # check_reactive_kstp()
             if self.is_reactive_tstep():
                 c_dbl_vect, mf6_conc_m3_array = self._transfer_array_to_phreeqcrm()
-                self.phreeqcbmi._get_kper_kstp_from_mf6api(self.mf6api) 
+                self.phreeqcbmi._get_kper_kstp_from_mf6api(self.mf6api)
                             # Moved from `_transfer_array_to_phreeqcrm()`
                 self._set_conc_at_current_kstep(mf6_conc_m3_array)
 
