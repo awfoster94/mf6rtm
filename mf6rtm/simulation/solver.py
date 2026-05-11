@@ -112,10 +112,14 @@ def prep_to_run(wd:os.PathLike, libname: Path | None = None) -> tuple[os.PathLik
     ), f"{yamlfile} not found in model directory {wd}"
     return yamlfile, dll
 
-def solve(wd:os.PathLike, reactive: Union[bool, None] = None, nthread: int = 1, libname: str = None) -> bool:
+def solve(wd:os.PathLike, reactive: Union[bool, None] = None, nthread: int = 1, libname: str = None, **mf6rtm_kwargs) -> bool:
     """Wrapper to prepare and call solve functions"""
 
     mf6rtm = initialize_interfaces(wd, nthread=nthread, libname=libname)
+    for key, val in mf6rtm_kwargs.items():
+        if not hasattr(mf6rtm, key):
+            raise AttributeError(f"Mf6RTM has no attribute '{key}'")
+        setattr(mf6rtm, key, val)
     if reactive is not None and isinstance(reactive, bool) and reactive != mf6rtm.reactive:
         print(
                 f"Mode changed from "
@@ -187,10 +191,11 @@ class Mf6RTM(object):
             The PHREEQC BMI instance.
         charge_offset : float
             Offset for charge, initialized to 0.0.
-        min_concentration : float
-            Floor value applied to non-charge component concentrations before
-            passing to PhreeqcRM. Replaces negative (and near-zero) values.
-            Default is 1e-30. Set via set_min_concentration().
+        min_concentration : float or None
+            Floor value for truncation applied to non-charge component
+            concentrations before passing to PhreeqcRM. Replaces negative
+            (and near-zero) values.
+            Default is None (no truncation). Set via set_min_concentration().
         wd :os.PathLike
             The working directory path.
         sout_fname : str
@@ -198,9 +203,10 @@ class Mf6RTM(object):
         reactive : bool
             Flag indicating if the model is reactive, default is True.
         threshold : float
-            Previously "epsaqu"?, initialized to 0.0.
-            Appears to be the relative difference in component concentraitons to set the "diffmask"
-            that turns off reactions in upcomping timestep.
+            Appears to be the relative difference in component concentraitons to set
+            the "diffmask" that turns off reactions in upcomping timestep.
+            Initialized to 1e-10. NOTE that 1e-15 is the relative precision of float64.
+            Previously "epsaqu"?
         fixed_components : Any
             Fixed components, default is None.
         get_selected_output_on : bool
@@ -221,7 +227,7 @@ class Mf6RTM(object):
         self.mf6api = mf6api
         self.phreeqcbmi = phreeqcbmi
         self.charge_offset = 0.0
-        self.min_concentration = 1e-80
+        self.min_concentration = None
         self.wd = Path(wd)
         self.threshold = 1e-10
         self.fixed_components = None
@@ -336,15 +342,16 @@ class Mf6RTM(object):
         self.time_conversion = 1.0 / time_units_dict[time_units]
         self.phreeqcbmi.SetTimeConversion(self.time_conversion)
 
-    def set_min_concentration(self, min_concentration: float) -> None:
+    def set_min_concentration(self, min_concentration: Union[float, None]) -> None:
         """Set the floor value for non-charge concentrations passed to PhreeqcRM.
 
         Parameters
         ----------
-        min_concentration : float
+        min_concentration : float or None
             Any non-charge concentration below this value will be replaced with
             this value before calling SetConcentrations. Use a small positive
             number (e.g. 1e-30) to avoid PHREEQC divide-by-zero errors.
+            Pass None to disable filtering entirely.
         """
         self.min_concentration = min_concentration
 
@@ -516,7 +523,7 @@ class Mf6RTM(object):
             concs = self.mf6api.get_value(f"{gwt_model_name}/X")
             if component.lower() == "charge":
                 concs -= self.charge_offset
-            else:
+            elif self.min_concentration is not None:
                 below = concs < utils.concentration_l_to_m3(self.min_concentration)
                 if below.any():
                     print(
@@ -575,6 +582,8 @@ class Mf6RTM(object):
         # check sout was created
         assert self.selected_output._check_sout_exist(), f"{self.selected_output.sout_fname} not found"
 
+        if self.min_concentration is not None:
+            print(f"Truncating concentrations at {self.min_concentration:.2e}")
         print("Starting Solution at {0}".format(sim_start.strftime(DT_FMT)))
         ctime = self._set_ctime()
         etime = self._set_etime()
