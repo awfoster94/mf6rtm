@@ -286,7 +286,7 @@ class Mup3d(object):
     """
     def __init__(
         self,
-        name: Union[int, None] = None,
+        name: Union[str, None] = None,
         solutions: Union[Solutions, None] = None,
         nlay: Union[int, None] = None,
         nrow: Union[int, None] = None,
