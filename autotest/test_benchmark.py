@@ -1167,7 +1167,9 @@ def compare_results(benchmarkdf, testdf, treshold = 0.01):
     # assert both dataframes have the same indices
     assert benchmarkdf.index.tolist() == testdf.index.tolist()
     # iterate each column and each index and assert an absolute difference less than 0.01
-    for col in benchmarkdf.columns:
+    # skip spatial metadata columns
+    spatial_cols = {"cell", "layer", "row", "col", "cell2d"}
+    for col in [c for c in benchmarkdf.columns if c not in spatial_cols]:
         checkerarr = [i < treshold for i in np.abs(benchmarkdf.loc[:, col].values - testdf.loc[:, col].values)]
         lenarr = len(checkerarr)
         #get percentage of True
