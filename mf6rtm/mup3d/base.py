@@ -1394,15 +1394,18 @@ class Mup3d(object):
         self.phreeqcrm_yaml = phreeqcrm_yaml
         return
 
-    def run(self, reactive = None, nthread=1, libname=None) -> bool:
+    def run(self, reactive=None, nthread=1, libname=None, output_format=None) -> bool:
         """Wrapper function to run the MF6RTM model
 
         Parameters
         ----------
         reactive : bool, optional
-            Whether to run the model in reactive mode. If None, uses the value from the config
-            nthread : int, optional
-                Number of threads to use for the simulation. Default is 1.
+            Whether to run the model in reactive mode. If None, uses the value from the config.
+        nthread : int, optional
+            Number of threads to use for the simulation. Default is 1.
+        output_format : str, optional
+            Output format: "csv" (default) or "hdf5". Overrides mf6rtm.toml [output].
+            Output file is named "sout.csv" or "sout.h5" accordingly.
 
         Returns
         -------
@@ -1411,7 +1414,8 @@ class Mup3d(object):
         """
         with working_dir(self.wd):
             print("Running mf6rtm", flush=True)
-            success = solve(self.wd, reactive=reactive, nthread=nthread, libname=libname)
+            success = solve(self.wd, reactive=reactive, nthread=nthread, libname=libname,
+                            output_format=output_format)
             return success
 
 @contextmanager

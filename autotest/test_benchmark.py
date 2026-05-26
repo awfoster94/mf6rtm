@@ -1153,13 +1153,20 @@ def get_test_results(model):
 
 def compare_results(benchmarkdf, testdf, treshold = 0.01):
     '''Compare benchmark and test results'''
+
+    # Align testdf to benchmark columns — testdf may have extra spatial columns
+    # added by the SelectedOutput improvements (#26)
+    shared_cols = [c for c in benchmarkdf.columns if c in testdf.columns]
+    testdf = testdf[shared_cols]
+    benchmarkdf = benchmarkdf[shared_cols]
+
     # assert both dataframes have the same shape
     assert benchmarkdf.shape == testdf.shape
     # assert both dataframes have the same columns
     assert benchmarkdf.columns.tolist() == testdf.columns.tolist()
     # assert both dataframes have the same indices
     assert benchmarkdf.index.tolist() == testdf.index.tolist()
-    # iterate each column and each index and assert an absolute difference less than 0.01 
+    # iterate each column and each index and assert an absolute difference less than 0.01
     for col in benchmarkdf.columns:
         checkerarr = [i < treshold for i in np.abs(benchmarkdf.loc[:, col].values - testdf.loc[:, col].values)]
         lenarr = len(checkerarr)

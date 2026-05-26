@@ -502,13 +502,14 @@ class SelectedOutput:
 
     def _write_sout_headers(self) -> None:
         """Write selected output headers to a file"""
+        if self.output_format == "hdf5":
+            return
         dims = grid_dimensions(self.mf6api)
         if len(dims) == 3:
             spatial = ["cell", "layer", "row", "col"]
         else:
             spatial = ["cell", "layer", "cell2d"]
         phreeqc_headers = [h for h in self.phreeqcbmi.sout_headers if h != "cell"]
-        # time_d first, then spatial, then chemistry
         headers = phreeqc_headers[:1] + spatial + phreeqc_headers[1:]
         with open(os.path.join(self.mf6rtm.wd, self.sout_fname), "w") as f:
             f.write(",".join(headers))
@@ -518,18 +519,17 @@ class SelectedOutput:
         """Remove the selected output file"""
         try:
             os.remove(os.path.join(self.mf6rtm.wd, self.sout_fname))
-        except:
+        except FileNotFoundError:
             pass
 
     def _append_to_soutdf_file(self) -> None:
         """Append the current selected output to the selected output file"""
         assert not self._current_soutdf.empty, "current sout is empty"
-        self._current_soutdf.to_csv(
-            os.path.join(self.mf6rtm.wd, self.sout_fname), mode="a", index=False, header=False
-        )
-
-    def _export_soutdf(self) -> None:
-        """Export the selected output dataframe to a csv file"""
-        self.phreeqcbmi.soutdf.to_csv(
-            os.path.join(self.mf6rtm.wd, self.sout_fname), index=False
-        )
+        path = os.path.join(self.mf6rtm.wd, self.sout_fname)
+        if self.output_format == "hdf5":
+            self._current_soutdf.to_hdf(
+                path, key="sout", mode="a", append=True, format="table",
+                data_columns=True, complevel=5, complib="blosc"
+            )
+        else:
+            self._current_soutdf.to_csv(path, mode="a", index=False, header=False)

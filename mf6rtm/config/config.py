@@ -61,7 +61,10 @@ class MF6RTMConfig:
                 "training_data": False,
                 "feature_variables": [],
                 "target_variables": [],
-            }
+            },
+            "output": {
+                "output_format": "csv",
+            },
         }
 
         for section, section_defaults in defaults.items():
@@ -331,6 +334,12 @@ class MF6RTMConfig:
                 'training_data': emu_config.get('training_data', True),
                 'feature_variables': emu_config.get('feature_variables', None),
                 'target_variables': emu_config.get('target_variables', None)
+            }
+
+        if 'output' in config_dict:
+            out_config = config_dict['output']
+            kwargs['output'] = {
+                'output_format': out_config.get('output_format', 'csv'),
             }
         # Flatten everything *except* 'reactive'
         remaining_dict = {k: v for k, v in config_dict.items() if k not in ['reactive',

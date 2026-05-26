@@ -1,5 +1,6 @@
 """Unit tests for externalio.py.
 """
+import os
 import shutil
 import tempfile
 
@@ -123,7 +124,6 @@ class TestAddSpatialColumns:
         so = SelectedOutput(mock_mf6rtm)
         with patch("mf6rtm.io.externalio.grid_dimensions", return_value=(2, 3, 4)):
             so._write_sout_headers()
-        import os
         header_line = open(os.path.join(mock_mf6rtm.wd, "sout.csv")).readline().strip()
         cols = header_line.split(",")
         assert cols[0] == "time_d"
@@ -139,7 +139,6 @@ class TestAddSpatialColumns:
         so = SelectedOutput(mock_mf6rtm)
         with patch("mf6rtm.io.externalio.grid_dimensions", return_value=(3, 10)):
             so._write_sout_headers()
-        import os
         header_line = open(os.path.join(mock_mf6rtm.wd, "sout.csv")).readline().strip()
         cols = header_line.split(",")
         assert cols[0] == "time_d"
@@ -154,7 +153,6 @@ class TestAddSpatialColumns:
         so = SelectedOutput(mock_mf6rtm)
         with patch("mf6rtm.io.externalio.grid_dimensions", return_value=(2, 3, 4)):
             so._write_sout_headers()
-        import os
         header_line = open(os.path.join(mock_mf6rtm.wd, "sout.csv")).readline().strip()
         cols = header_line.split(",")
         assert cols.count("cell") == 1
@@ -163,3 +161,52 @@ class TestAddSpatialColumns:
         assert cols[2] == "layer"
         assert cols[3] == "row"
         assert cols[4] == "col"
+
+
+# HDF5 output and CSV append
+
+class TestAppendToSoutFile:
+    def test_csv_append(self, mock_mf6rtm):
+        so = SelectedOutput(mock_mf6rtm)
+        so._current_soutdf = pd.DataFrame({"time_d": [1.0], "pH": [7.0]})
+        so._append_to_soutdf_file()
+        path = os.path.join(mock_mf6rtm.wd, "sout.csv")
+        assert os.path.exists(path)
+        assert "7.0" in open(path).read()
+
+    def test_hdf5_append(self, mock_mf6rtm):
+        pytest.importorskip("tables")
+        so = SelectedOutput(mock_mf6rtm, sout_fname="sout.h5")
+        so._current_soutdf = pd.DataFrame({"time_d": [1.0], "pH": [7.0]})
+        so._append_to_soutdf_file()
+        df = pd.read_hdf(os.path.join(mock_mf6rtm.wd, "sout.h5"), key="sout")
+        assert len(df) == 1
+        assert "pH" in df.columns
+
+    def test_hdf5_multiple_appends_accumulate(self, mock_mf6rtm):
+        pytest.importorskip("tables")
+        so = SelectedOutput(mock_mf6rtm, sout_fname="out.hdf5")
+        for t in [1.0, 2.0, 3.0]:
+            so._current_soutdf = pd.DataFrame({"time_d": [t], "pH": [7.0]})
+            so._append_to_soutdf_file()
+        df = pd.read_hdf(os.path.join(mock_mf6rtm.wd, "out.hdf5"), key="sout")
+        assert len(df) == 3
+
+    def test_rm_sout_file(self, mock_mf6rtm):
+        so = SelectedOutput(mock_mf6rtm)
+        path = os.path.join(mock_mf6rtm.wd, "sout.csv")
+        open(path, "w").close()
+        so._rm_sout_file()
+        assert not os.path.exists(path)
+
+    def test_rm_sout_file_missing_no_error(self, mock_mf6rtm):
+        so = SelectedOutput(mock_mf6rtm)
+        so._rm_sout_file()  # must not raise
+
+    def test_write_sout_headers_skipped_for_hdf5(self, mock_mf6rtm):
+        pytest.importorskip("tables")
+        mock_mf6rtm.phreeqcbmi.sout_headers = ["time_d", "pH"]
+        so = SelectedOutput(mock_mf6rtm, sout_fname="sout.h5")
+        with patch("mf6rtm.io.externalio.grid_dimensions", return_value=(1, 2, 3)):
+            so._write_sout_headers()
+        assert not os.path.exists(os.path.join(mock_mf6rtm.wd, "sout.h5"))

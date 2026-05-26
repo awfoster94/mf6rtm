@@ -112,10 +112,12 @@ def prep_to_run(wd:os.PathLike, libname: Path | None = None) -> tuple[os.PathLik
     ), f"{yamlfile} not found in model directory {wd}"
     return yamlfile, dll
 
-def solve(wd:os.PathLike, reactive: Union[bool, None] = None, nthread: int = 1, libname: str = None) -> bool:
+def solve(wd:os.PathLike, reactive: Union[bool, None] = None, nthread: int = 1, libname: str = None,
+          output_format: str = None) -> bool:
     """Wrapper to prepare and call solve functions"""
 
-    mf6rtm = initialize_interfaces(wd, nthread=nthread, libname=libname)
+    mf6rtm = initialize_interfaces(wd, nthread=nthread, libname=libname,
+                                   output_format=output_format)
     if reactive is not None and isinstance(reactive, bool) and reactive != mf6rtm.reactive:
         print(
                 f"Mode changed from "
@@ -131,7 +133,8 @@ def solve(wd:os.PathLike, reactive: Union[bool, None] = None, nthread: int = 1, 
 
 
 # TODO: we should maybe move this into the Mf6API as an alternative constructor
-def initialize_interfaces(wd:os.PathLike, nthread: int = 1, libname: str = None) -> Mf6API:
+def initialize_interfaces(wd:os.PathLike, nthread: int = 1, libname: str = None,
+                           output_format: str = None) -> Mf6API:
     """Function to initialize the interfaces for modflowapi and phreeqcrm and returns the mf6rtm object"""
 
     yamlfile, dll = prep_to_run(wd, libname=libname)
@@ -143,7 +146,7 @@ def initialize_interfaces(wd:os.PathLike, nthread: int = 1, libname: str = None)
     # initialize the interfaces
     mf6api = Mf6API(wd, dll)
     phreeqcrm = PhreeqcBMI(yamlfile) #FIXME: Does not work with path like
-    mf6rtm = Mf6RTM(wd, mf6api, phreeqcrm)
+    mf6rtm = Mf6RTM(wd, mf6api, phreeqcrm, output_format=output_format)
     return mf6rtm
 
 
@@ -165,8 +168,7 @@ class Mf6RTM(object):
         wd:os.PathLike,
         mf6api: Mf6API,
         phreeqcbmi: PhreeqcBMI,
-        sout_fname: str = "sout.csv",
-        output_format: str = "csv",
+        output_format: str = None,
     ) -> None:
         """
         Initialize the Mf6RTM instance with specified working directory, MF6API,
@@ -227,7 +229,6 @@ class Mf6RTM(object):
         self.wd = Path(wd)
         self.threshold = 1e-10
         self.fixed_components = None
-        self.selected_output = SelectedOutput(self, sout_fname=sout_fname, output_format=output_format)
 
         # set component model dictionary & list of conservative_transport_models
         self.component_model_dict, self.conservative_transport_models = self._create_component_model_dict()
@@ -240,6 +241,14 @@ class Mf6RTM(object):
         self.config = MF6RTMConfig.from_toml_file(self.wd/"mf6rtm.toml")
         self.reactive = self.config.reactive['enabled']
         self.set_emulator_training()
+
+        # output settings: constructor param overrides config file value
+        out_cfg = getattr(self.config, 'output', {})
+        _output_format = output_format if output_format is not None else out_cfg.get('output_format', 'csv')
+        if _output_format in ("h5", "hdf5", "hdf"):
+            _output_format = "hdf5"
+        _sout_fname = "sout.h5" if _output_format == "hdf5" else "sout.csv"
+        self.selected_output = SelectedOutput(self, sout_fname=_sout_fname, output_format=_output_format)
 
     def set_emulator_training(self) -> None:
         """
@@ -574,8 +583,9 @@ class Mf6RTM(object):
         sim_start = datetime.now()
         self._prepare_to_solve()
 
-        # check sout was created
-        assert self.selected_output._check_sout_exist(), f"{self.selected_output.sout_fname} not found"
+        # HDF5 file is created on first append; CSV is created by _write_sout_headers
+        if self.selected_output.output_format != "hdf5":
+            assert self.selected_output._check_sout_exist(), f"{self.selected_output.sout_fname} not found"
 
         print("Starting Solution at {0}".format(sim_start.strftime(DT_FMT)))
         ctime = self._set_ctime()
