@@ -27,6 +27,7 @@ flopy = "*"
 modflowapi = "*"
 toml = "*"
 pytables = "*"
+sqlite = ">=3.39"
 
 # MODFLOW feature placeholder
 [feature.modflow.dependencies]
