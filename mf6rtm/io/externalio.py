@@ -460,12 +460,16 @@ class SelectedOutput:
         if self.mf6rtm._check_inactive_cells_exist(self.mf6rtm.diffmask) and hasattr(self, "_sout_k"):
             sout = self.__replace_inactive_cells_in_sout(sout, self.mf6rtm.diffmask)
         self._sout_k = sout  # save sout to a private attribute
-        # add time to selected ouput
-        sout[0] = np.ones_like(sout[0]) * (self.mf6rtm.ctime + self.mf6rtm.time_step)
+        t = self.mf6rtm.ctime + self.mf6rtm.time_step
         headers = list(self.phreeqcbmi.sout_headers)
+        time_row = next((i for i, h in enumerate(headers) if "time" in h.lower()), None)
+        if time_row is not None:
+            sout[time_row] = np.ones_like(sout[time_row]) * t
         df = pd.DataFrame(columns=headers)
         for col, arr in zip(headers, sout):
             df[col] = arr
+        if time_row is None:
+            df.insert(0, "time_d", t)
         df = self._add_spatial_columns(df)
         self._current_soutdf = df
 
@@ -510,7 +514,10 @@ class SelectedOutput:
         else:
             spatial = ["cell", "layer", "cell2d"]
         phreeqc_headers = [h for h in self.phreeqcbmi.sout_headers if h != "cell"]
-        headers = phreeqc_headers[:1] + spatial + phreeqc_headers[1:]
+        if not any("time" in h.lower() for h in phreeqc_headers):
+            headers = ["time_d"] + spatial + phreeqc_headers
+        else:
+            headers = phreeqc_headers[:1] + spatial + phreeqc_headers[1:]
         with open(os.path.join(self.mf6rtm.wd, self.sout_fname), "w") as f:
             f.write(",".join(headers))
             f.write("\n")

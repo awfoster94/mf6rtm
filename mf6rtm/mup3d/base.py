@@ -1375,7 +1375,17 @@ class Mup3d(object):
         # Clear contents of workers and utility
         input = "DELETE; -all"
         status = phreeqcrm_yaml.YAMLRunString(True, False, True, input)
-        phreeqcrm_yaml.YAMLAddOutputVars("AddOutputVars", "true")
+        if self.postfix is None:
+            phreeqcrm_yaml.YAMLAddOutputVars("SolutionProperties", "true")
+            comps = [c for c in self.components if c.lower() not in ("h", "o", "charge")]
+            if comps:
+                phreeqcrm_yaml.YAMLAddOutputVars("SolutionTotalMolalities", comps)
+            if self.equilibrium_phases is not None:
+                phreeqcrm_yaml.YAMLAddOutputVars("EquilibriumPhases", self.equilibrium_phases.names)
+            if self.kinetic_phases is not None:
+                phreeqcrm_yaml.YAMLAddOutputVars("KineticReactants", self.kinetic_phases.names)
+        else:
+            phreeqcrm_yaml.YAMLAddOutputVars("AddOutputVars", "true")
 
         status = phreeqcrm_yaml.YAMLFindComponents()
         # convert ic1 to a list
