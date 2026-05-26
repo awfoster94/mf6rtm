@@ -1,6 +1,6 @@
 # MF6RTM: Reactive Transport Model via the MODFLOW 6 and PHREEQCRM APIs
-![Tests](https://github.com/p-ortega/mf6rtm/actions/workflows/tests_main.yml/badge.svg)
-![Tests](https://github.com/p-ortega/mf6rtm/actions/workflows/tests_macos.yml/badge.svg)
+![Tests](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml/badge.svg)
+![Tests](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi-macos.yml/badge.svg)
 [![Coverage Status](https://coveralls.io/repos/github/p-ortega/mf6rtm/badge.svg?branch=develop)](https://coveralls.io/github/p-ortega/mf6rtm?branch=main)
 [![PyPI License](https://img.shields.io/pypi/l/mf6rtm)](https://pypi.python.org/pypi/mf6rtm)
 <!-- [![PyPI Status](https://img.shields.io/pypi/status/mf6rtm.png)](https://pypi.python.org/pypi/mf6rtm) -->
