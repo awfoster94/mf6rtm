@@ -165,6 +165,8 @@ class Mf6RTM(object):
         wd:os.PathLike,
         mf6api: Mf6API,
         phreeqcbmi: PhreeqcBMI,
+        sout_fname: str = "sout.csv",
+        output_format: str = "csv",
     ) -> None:
         """
         Initialize the Mf6RTM instance with specified working directory, MF6API,
@@ -225,7 +227,7 @@ class Mf6RTM(object):
         self.wd = Path(wd)
         self.threshold = 1e-10
         self.fixed_components = None
-        self.selected_output = SelectedOutput(self)
+        self.selected_output = SelectedOutput(self, sout_fname=sout_fname, output_format=output_format)
 
         # set component model dictionary & list of conservative_transport_models
         self.component_model_dict, self.conservative_transport_models = self._create_component_model_dict()

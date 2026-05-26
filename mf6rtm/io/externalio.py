@@ -354,11 +354,21 @@ class Regenerator:
         return self.config
 
 class SelectedOutput:
-    def __init__(self, mf6rtm):
+    def __init__(self, mf6rtm, sout_fname: str = "sout.csv", output_format: str = "csv"):
         self.mf6rtm = mf6rtm
         self.phreeqcbmi = mf6rtm.phreeqcbmi
         self.mf6api = mf6rtm.mf6api
-        self.sout_fname = "sout.csv"
+        self.sout_fname = sout_fname
+        if output_format == "csv" and sout_fname.endswith((".h5", ".hdf5")):
+            output_format = "hdf5"
+        if output_format == "hdf5":
+            try:
+                import tables  # noqa: F401
+            except ImportError:
+                raise ImportError(
+                    "HDF5 output requires PyTables: pip install tables"
+                )
+        self.output_format = output_format
         self.get_selected_output_on = True
 
     def write_ml_arrays(self, conc_array, iter,

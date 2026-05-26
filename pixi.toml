@@ -26,6 +26,7 @@ phreeqcrm = "*"
 flopy = "*"
 modflowapi = "*"
 toml = "*"
+pytables = "*"
 
 # MODFLOW feature placeholder
 [feature.modflow.dependencies]
