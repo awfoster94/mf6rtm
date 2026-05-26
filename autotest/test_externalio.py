@@ -64,3 +64,102 @@ class TestSelectedOutputInit:
         """Explicit output_format='csv' overrides extension detection."""
         so = SelectedOutput(mock_mf6rtm, sout_fname="out.csv", output_format="csv")
         assert so.output_format == "csv"
+
+
+# spatial cell identifier columns
+
+class TestAddSpatialColumns:
+    def test_dis_adds_cell_layer_row_col(self, mock_mf6rtm):
+        so = SelectedOutput(mock_mf6rtm)
+        df = pd.DataFrame({"time_d": [1.0] * 24, "pH": range(24), "pe": range(24)})
+        with patch("mf6rtm.io.externalio.grid_dimensions", return_value=(2, 3, 4)):
+            result = so._add_spatial_columns(df)
+        assert list(result.columns[1:5]) == ["cell", "layer", "row", "col"]
+        assert result["cell"].iloc[0] == 1
+        assert result["layer"].iloc[0] == 1
+        assert result["row"].iloc[0] == 1
+        assert result["col"].iloc[0] == 1
+        assert result["cell"].iloc[-1] == 24
+        assert result["layer"].iloc[-1] == 2
+
+    def test_disv_adds_cell_layer_cell2d(self, mock_mf6rtm):
+        so = SelectedOutput(mock_mf6rtm)
+        df = pd.DataFrame({"time_d": [1.0] * 30, "pH": range(30)})
+        with patch("mf6rtm.io.externalio.grid_dimensions", return_value=(3, 10)):
+            result = so._add_spatial_columns(df)
+        assert list(result.columns[1:4]) == ["cell", "layer", "cell2d"]
+        assert "col" not in result.columns
+        assert result["layer"].iloc[10] == 2   # 11th cell (0-indexed=10) → layer 2
+
+    def test_cell_not_duplicated_if_phreeqc_has_it(self, mock_mf6rtm):
+        """PHREEQC cell column is dropped and replaced by our spatial cell."""
+        so = SelectedOutput(mock_mf6rtm)
+        df = pd.DataFrame({"time_d": [1.0] * 6, "cell": [1, 2, 3, 4, 5, 6], "pH": range(6)})
+        with patch("mf6rtm.io.externalio.grid_dimensions", return_value=(1, 2, 3)):
+            result = so._add_spatial_columns(df)
+        assert list(result.columns).count("cell") == 1
+        assert result.columns[0] == "time_d"
+        assert result.columns[1] == "cell"
+
+    def test_dis_indices_are_one_based(self, mock_mf6rtm):
+        so = SelectedOutput(mock_mf6rtm)
+        df = pd.DataFrame({"time_d": [1.0] * 6, "pH": range(6)})
+        with patch("mf6rtm.io.externalio.grid_dimensions", return_value=(1, 2, 3)):
+            result = so._add_spatial_columns(df)
+        assert result["cell"].min() == 1
+        assert result["layer"].min() == 1
+        assert result["row"].min() == 1
+        assert result["col"].min() == 1
+
+    def test_time_column_remains_first(self, mock_mf6rtm):
+        so = SelectedOutput(mock_mf6rtm)
+        df = pd.DataFrame({"time_d": [1.0] * 6, "pH": range(6)})
+        with patch("mf6rtm.io.externalio.grid_dimensions", return_value=(1, 2, 3)):
+            result = so._add_spatial_columns(df)
+        assert result.columns[0] == "time_d"
+
+    def test_write_sout_headers_dis_includes_spatial(self, mock_mf6rtm):
+        mock_mf6rtm.phreeqcbmi.sout_headers = ["time_d", "pH", "pe"]
+        so = SelectedOutput(mock_mf6rtm)
+        with patch("mf6rtm.io.externalio.grid_dimensions", return_value=(2, 3, 4)):
+            so._write_sout_headers()
+        import os
+        header_line = open(os.path.join(mock_mf6rtm.wd, "sout.csv")).readline().strip()
+        cols = header_line.split(",")
+        assert cols[0] == "time_d"
+        assert cols[1] == "cell"
+        assert cols[2] == "layer"
+        assert cols[3] == "row"
+        assert cols[4] == "col"
+        assert "pH" in cols
+        assert "pe" in cols
+
+    def test_write_sout_headers_disv_includes_spatial(self, mock_mf6rtm):
+        mock_mf6rtm.phreeqcbmi.sout_headers = ["time_d", "pH"]
+        so = SelectedOutput(mock_mf6rtm)
+        with patch("mf6rtm.io.externalio.grid_dimensions", return_value=(3, 10)):
+            so._write_sout_headers()
+        import os
+        header_line = open(os.path.join(mock_mf6rtm.wd, "sout.csv")).readline().strip()
+        cols = header_line.split(",")
+        assert cols[0] == "time_d"
+        assert cols[1] == "cell"
+        assert cols[2] == "layer"
+        assert cols[3] == "cell2d"
+        assert "col" not in cols
+
+    def test_write_sout_headers_no_duplicate_cell_when_phreeqc_has_it(self, mock_mf6rtm):
+        """PHREEQC 'cell' is excluded — our spatial cell replaces it, time_d stays first."""
+        mock_mf6rtm.phreeqcbmi.sout_headers = ["time_d", "cell", "pH"]
+        so = SelectedOutput(mock_mf6rtm)
+        with patch("mf6rtm.io.externalio.grid_dimensions", return_value=(2, 3, 4)):
+            so._write_sout_headers()
+        import os
+        header_line = open(os.path.join(mock_mf6rtm.wd, "sout.csv")).readline().strip()
+        cols = header_line.split(",")
+        assert cols.count("cell") == 1
+        assert cols[0] == "time_d"
+        assert cols[1] == "cell"
+        assert cols[2] == "layer"
+        assert cols[3] == "row"
+        assert cols[4] == "col"

@@ -428,9 +428,14 @@ class SelectedOutput:
     def _update_selected_output(self) -> None:
         """Update the selected output dataframe and save to attribute"""
         self._get_selected_output()
+        common_dtypes = {
+            col: dtype
+            for col, dtype in self._current_soutdf.dtypes.items()
+            if col in self.phreeqcbmi.soutdf.columns
+        }
         updf = pd.concat(
             [
-                self.phreeqcbmi.soutdf.astype(self._current_soutdf.dtypes),
+                self.phreeqcbmi.soutdf.astype(common_dtypes),
                 self._current_soutdf,
             ]
         )
@@ -457,9 +462,11 @@ class SelectedOutput:
         self._sout_k = sout  # save sout to a private attribute
         # add time to selected ouput
         sout[0] = np.ones_like(sout[0]) * (self.mf6rtm.ctime + self.mf6rtm.time_step)
-        df = pd.DataFrame(columns=self.phreeqcbmi.soutdf.columns)
-        for col, arr in zip(df.columns, sout):
+        headers = list(self.phreeqcbmi.sout_headers)
+        df = pd.DataFrame(columns=headers)
+        for col, arr in zip(headers, sout):
             df[col] = arr
+        df = self._add_spatial_columns(df)
         self._current_soutdf = df
 
     def _update_soutdf(self, df: pd.DataFrame) -> None:
@@ -470,10 +477,41 @@ class SelectedOutput:
         """Check if selected output file exists"""
         return os.path.exists(os.path.join(self.mf6rtm.wd, self.sout_fname))
 
+    def _add_spatial_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Insert 1-indexed MODFLOW spatial columns after the first (time) column."""
+        dims = grid_dimensions(self.mf6api)
+        cell_idx = np.arange(len(df))
+
+        if "cell" in df.columns:
+            df = df.drop(columns=["cell"])
+
+        df.insert(1, "cell", cell_idx + 1)
+
+        if len(dims) == 3:
+            nlay, nrow, ncol = dims
+            layers, rows, cols = np.unravel_index(cell_idx, (nlay, nrow, ncol))
+            df.insert(2, "layer", layers + 1)
+            df.insert(3, "row", rows + 1)
+            df.insert(4, "col", cols + 1)
+        elif len(dims) == 2:
+            nlay, ncpl = dims
+            layers, cell2d = np.divmod(cell_idx, ncpl)
+            df.insert(2, "layer", layers + 1)
+            df.insert(3, "cell2d", cell2d + 1)
+        return df
+
     def _write_sout_headers(self) -> None:
         """Write selected output headers to a file"""
+        dims = grid_dimensions(self.mf6api)
+        if len(dims) == 3:
+            spatial = ["cell", "layer", "row", "col"]
+        else:
+            spatial = ["cell", "layer", "cell2d"]
+        phreeqc_headers = [h for h in self.phreeqcbmi.sout_headers if h != "cell"]
+        # time_d first, then spatial, then chemistry
+        headers = phreeqc_headers[:1] + spatial + phreeqc_headers[1:]
         with open(os.path.join(self.mf6rtm.wd, self.sout_fname), "w") as f:
-            f.write(",".join(self.phreeqcbmi.sout_headers))
+            f.write(",".join(headers))
             f.write("\n")
 
     def _rm_sout_file(self) -> None:
