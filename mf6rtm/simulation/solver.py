@@ -6,7 +6,7 @@ import os
 import numpy as np
 
 from datetime import datetime
-from typing import Any, Union, Optional, Tuple
+from typing import Any
 from pathlib import Path
 
 from PIL import Image
@@ -112,7 +112,7 @@ def prep_to_run(wd:os.PathLike, libname: Path | None = None) -> tuple[os.PathLik
     ), f"{yamlfile} not found in model directory {wd}"
     return yamlfile, dll
 
-def solve(wd:os.PathLike, reactive: Union[bool, None] = None, nthread: int = 1, libname: str = None, **mf6rtm_kwargs) -> bool:
+def solve(wd:os.PathLike, reactive: bool | None = None, nthread: int = 1, libname: Path | None = None, **mf6rtm_kwargs) -> bool:
     """Wrapper to prepare and call solve functions"""
 
     mf6rtm = initialize_interfaces(wd, nthread=nthread, libname=libname)
@@ -135,7 +135,7 @@ def solve(wd:os.PathLike, reactive: Union[bool, None] = None, nthread: int = 1, 
 
 
 # TODO: we should maybe move this into the Mf6API as an alternative constructor
-def initialize_interfaces(wd:os.PathLike, nthread: int = 1, libname: str = None) -> Mf6API:
+def initialize_interfaces(wd:os.PathLike, nthread: int = 1, libname: Path | None = None) -> Mf6API:
     """Function to initialize the interfaces for modflowapi and phreeqcrm and returns the mf6rtm object"""
 
     yamlfile, dll = prep_to_run(wd, libname=libname)
@@ -342,7 +342,7 @@ class Mf6RTM(object):
         self.time_conversion = 1.0 / time_units_dict[time_units]
         self.phreeqcbmi.SetTimeConversion(self.time_conversion)
 
-    def set_min_concentration(self, min_concentration: Union[float, None]) -> None:
+    def set_min_concentration(self, min_concentration: float | None) -> None:
         """Set the floor value for non-charge concentrations passed to PhreeqcRM.
 
         Parameters
@@ -512,7 +512,7 @@ class Mf6RTM(object):
         mf6_conc_array[:, inactive_idx] = self.previous_iteration_conc[:, inactive_idx]
         return mf6_conc_array
 
-    def _transfer_array_to_phreeqcrm(self) -> np.ndarray[Tuple[Any], np.float64]:
+    def _transfer_array_to_phreeqcrm(self) -> np.ndarray[tuple[Any], np.float64]:
         """Get the 2D concentration array (ncomps, nxyz) from mf6, convert units,
         reshape to 1D (ncomps*nxyz), and transfer to phreeqc bmi.
         Returns: 1D c_dbl_vect of length (ncomps*nxyz), 2D conc array from mf6
@@ -766,7 +766,7 @@ def mrbeaker() -> str:
 
     return mrbeaker
 
-def run_cmd(cwd: Optional[os.PathLike] = None) -> None:
+def run_cmd(cwd: str | os.PathLike | None = None) -> None:
     """Console entrypoint compatibility wrapper.
 
     When used as a console script the entrypoint calls `mf6rtm:run_cmd`
@@ -777,4 +777,4 @@ def run_cmd(cwd: Optional[os.PathLike] = None) -> None:
         cwd = os.getcwd()
 
     # run the solve function
-    solve(cwd)
+    solve(Path(cwd))
