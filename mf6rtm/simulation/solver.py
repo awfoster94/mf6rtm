@@ -524,14 +524,15 @@ class Mf6RTM(object):
             if component.lower() == "charge":
                 concs -= self.charge_offset
             elif self.min_concentration is not None:
-                below = concs < utils.concentration_l_to_m3(self.min_concentration)
+                floor_m3 = utils.concentration_l_to_m3(self.min_concentration)
+                below = concs < floor_m3
                 if below.any():
                     print(
                         f"  [{component}] {below.sum()} cell(s) below "
-                        f"min_concentration (min={concs[below].min():.2e}); "
-                        f"clipping to {self.min_concentration:.2e}"
+                        f"min_concentration (min={utils.concentration_m3_to_l(concs[below].min()):.2e} mol/L); "
+                        f"clipping to {self.min_concentration:.2e} mol/L"
                     )
-                np.clip(concs, self.min_concentration, None, out=concs)
+                np.clip(concs, floor_m3, None, out=concs)
             mf6_conc_m3_array[i] = concs
 
         c_dbl_vect = utils.concentration_m3_to_l(mf6_conc_m3_array.ravel())
@@ -583,7 +584,7 @@ class Mf6RTM(object):
         assert self.selected_output._check_sout_exist(), f"{self.selected_output.sout_fname} not found"
 
         if self.min_concentration is not None:
-            print(f"Truncating concentrations at {self.min_concentration:.2e}")
+            print(f"Truncating concentrations at {self.min_concentration:.2e} mol/L")
         print("Starting Solution at {0}".format(sim_start.strftime(DT_FMT)))
         ctime = self._set_ctime()
         etime = self._set_etime()

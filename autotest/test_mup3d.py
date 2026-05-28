@@ -589,16 +589,74 @@ class TestMup3dSaveLoad:
         model.set_initial_temp(30.0)
         model.set_componenth2o(True)
         model.set_charge_offset(5.0)
-        
+
         model.save_mup3d('test_model.pkl')
-        
+
         # Load the model
         loaded_model = Mup3d.load_mup3d('test_model.pkl', temp_dir)
-        
+
         assert loaded_model.nlay == 1
         assert loaded_model.nrow == 2
         assert loaded_model.ncol == 5
         assert loaded_model.init_temp == 30.0
         assert loaded_model.componenth2o is True
         assert loaded_model.charge_offset == 5.0
+
+
+# ==================== solve() kwargs Tests ====================
+
+class TestSolveKwargs:
+    """Tests for the **kwargs passthrough in solve() and Mup3d.run()."""
+
+    def _make_mock_mf6rtm(self, **attrs):
+        """Return a Mock with Mf6RTM-like attributes pre-set."""
+        mock = Mock()
+        defaults = dict(
+            reactive=True,
+            min_concentration=None,
+            threshold=1e-10,
+            charge_offset=0.0,
+            fixed_components=None,
+        )
+        defaults.update(attrs)
+        for k, v in defaults.items():
+            setattr(mock, k, v)
+        return mock
+
+    @patch("mf6rtm.simulation.solver.initialize_interfaces")
+    def test_kwarg_sets_attribute(self, mock_init):
+        """Valid kwargs are applied to the Mf6RTM instance before solving."""
+        from mf6rtm.simulation.solver import solve
+
+        mock_mf6rtm = self._make_mock_mf6rtm()
+        mock_init.return_value = mock_mf6rtm
+
+        solve(Path("/fake/wd"), min_concentration=1e-6)
+
+        assert mock_mf6rtm.min_concentration == 1e-6
+
+    @patch("mf6rtm.simulation.solver.initialize_interfaces")
+    def test_multiple_kwargs_set(self, mock_init):
+        """Multiple valid kwargs are all applied."""
+        from mf6rtm.simulation.solver import solve
+
+        mock_mf6rtm = self._make_mock_mf6rtm()
+        mock_init.return_value = mock_mf6rtm
+
+        solve(Path("/fake/wd"), threshold=1e-8, charge_offset=0.5)
+
+        assert mock_mf6rtm.threshold == 1e-8
+        assert mock_mf6rtm.charge_offset == 0.5
+
+    @patch("mf6rtm.simulation.solver.initialize_interfaces")
+    def test_unknown_kwarg_raises(self, mock_init):
+        """An unrecognised kwarg raises AttributeError before solving."""
+        from mf6rtm.simulation.solver import solve
+        from mf6rtm.simulation.solver import Mf6RTM
+
+        mock_mf6rtm = Mock(spec=Mf6RTM)
+        mock_init.return_value = mock_mf6rtm
+
+        with pytest.raises(AttributeError, match="no attribute 'nonexistent_param'"):
+            solve(Path("/fake/wd"), nonexistent_param=42)
 
