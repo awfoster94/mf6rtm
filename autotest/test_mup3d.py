@@ -6,6 +6,7 @@ import shutil
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
+from mf6rtm.simulation.solver import Mf6RTM
 from mf6rtm.mup3d.base import (
     Block,
     Solutions,
@@ -659,4 +660,88 @@ class TestSolveKwargs:
 
         with pytest.raises(AttributeError, match="no attribute 'nonexistent_param'"):
             solve(Path("/fake/wd"), nonexistent_param=42)
+
+
+# ==================== Mf6RTM concentration transfer Tests ====================
+
+class TestTransferArrayToPhreeqcRM:
+    """Unit tests for _transfer_array_to_phreeqcrm concentration clipping."""
+
+    def _make_mock_self(self, components, concs_by_component, min_concentration=None, charge_offset=0.0):
+        """Build a minimal mock Mf6RTM instance for _transfer_array_to_phreeqcrm."""
+        nxyz = len(next(iter(concs_by_component.values())))
+        mock = MagicMock()
+        mock.nxyz = nxyz
+        mock.min_concentration = min_concentration
+        mock.charge_offset = charge_offset
+        mock.phreeqcbmi.ncomps = len(components)
+        mock.phreeqcbmi.components = components
+        mock.component_model_dict = {c: f"gwt_{c.lower()}" for c in components}
+        mock.mf6api.get_value.side_effect = lambda key: concs_by_component[
+            key.split("/")[0].lower().replace("gwt_", "")
+        ].copy()
+        return mock
+
+    def test_clipping_uses_m3_floor(self):
+        """np.clip uses the mol/m³ floor, not the raw mol/L value."""
+        # min_concentration = 1e-6 mol/L → floor in mol/m³ = 1e-3
+        concs = np.array([-5e-4, 5e-4, 2e-3])  # mol/m³; first two are below floor
+        mock = self._make_mock_self(
+            components=["Na"],
+            concs_by_component={"na": concs},
+            min_concentration=1e-6,
+        )
+
+        Mf6RTM._transfer_array_to_phreeqcrm(mock)
+
+        passed = mock.phreeqcbmi.SetConcentrations.call_args[0][0]
+        result_m3 = passed * 1e3  # convert back from mol/L to mol/m³
+        floor_m3 = 1e-3
+        assert np.all(result_m3 >= floor_m3), "Values below floor_m3 were not clipped"
+
+    def test_clipping_prints_when_below(self, capsys):
+        """A warning is printed when cells fall below min_concentration."""
+        concs = np.array([-1e-3, 2e-3])  # first cell below floor of 1e-3 mol/m³
+        mock = self._make_mock_self(
+            components=["Ca"],
+            concs_by_component={"ca": concs},
+            min_concentration=1e-6,
+        )
+
+        Mf6RTM._transfer_array_to_phreeqcrm(mock)
+
+        captured = capsys.readouterr()
+        assert "mol/L" in captured.out
+        assert "Ca" in captured.out
+
+    def test_no_clipping_when_min_concentration_none(self):
+        """When min_concentration is None, negative values pass through unchanged."""
+        concs = np.array([-1e-3, 2e-3])
+        mock = self._make_mock_self(
+            components=["Cl"],
+            concs_by_component={"cl": concs},
+            min_concentration=None,
+        )
+
+        Mf6RTM._transfer_array_to_phreeqcrm(mock)
+
+        passed = mock.phreeqcbmi.SetConcentrations.call_args[0][0]
+        result_m3 = passed * 1e3
+        assert result_m3[0] < 0, "Negative value should not be clipped when min_concentration=None"
+
+    def test_charge_component_uses_offset(self):
+        """Charge component subtracts charge_offset instead of clipping."""
+        concs = np.array([5e-3, 3e-3])
+        mock = self._make_mock_self(
+            components=["Charge"],
+            concs_by_component={"charge": concs},
+            min_concentration=1e-6,
+            charge_offset=1e-3,
+        )
+
+        Mf6RTM._transfer_array_to_phreeqcrm(mock)
+
+        passed = mock.phreeqcbmi.SetConcentrations.call_args[0][0]
+        result_m3 = passed * 1e3
+        np.testing.assert_allclose(result_m3, concs - 1e-3)
 
