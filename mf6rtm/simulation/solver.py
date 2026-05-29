@@ -227,7 +227,6 @@ class Mf6RTM(object):
         self.mf6api = mf6api
         self.phreeqcbmi = phreeqcbmi
         self.charge_offset = 0.0
-        self.min_concentration = None
         self.wd = Path(wd)
         self.threshold = 1e-10
         self.fixed_components = None
@@ -243,6 +242,7 @@ class Mf6RTM(object):
 
         self.config = MF6RTMConfig.from_toml_file(self.wd/"mf6rtm.toml")
         self.reactive = self.config.reactive['enabled']
+        self.min_concentration = self.config.solver.get('min_concentration', None)
         self.set_emulator_training()
 
     def set_emulator_training(self) -> None:
