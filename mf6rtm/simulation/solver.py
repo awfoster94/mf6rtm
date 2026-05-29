@@ -6,7 +6,7 @@ import os
 import numpy as np
 
 from datetime import datetime
-from typing import Any, Union, Optional, Tuple
+from typing import Any
 from pathlib import Path
 
 from PIL import Image
@@ -112,10 +112,14 @@ def prep_to_run(wd:os.PathLike, libname: Path | None = None) -> tuple[os.PathLik
     ), f"{yamlfile} not found in model directory {wd}"
     return yamlfile, dll
 
-def solve(wd:os.PathLike, reactive: Union[bool, None] = None, nthread: int = 1, libname: str = None) -> bool:
+def solve(wd:os.PathLike, reactive: bool | None = None, nthread: int = 1, libname: Path | None = None, **mf6rtm_kwargs) -> bool:
     """Wrapper to prepare and call solve functions"""
 
     mf6rtm = initialize_interfaces(wd, nthread=nthread, libname=libname)
+    for key, val in mf6rtm_kwargs.items():
+        if not hasattr(mf6rtm, key):
+            raise AttributeError(f"Mf6RTM has no attribute '{key}'")
+        setattr(mf6rtm, key, val)
     if reactive is not None and isinstance(reactive, bool) and reactive != mf6rtm.reactive:
         print(
                 f"Mode changed from "
@@ -131,7 +135,7 @@ def solve(wd:os.PathLike, reactive: Union[bool, None] = None, nthread: int = 1, 
 
 
 # TODO: we should maybe move this into the Mf6API as an alternative constructor
-def initialize_interfaces(wd:os.PathLike, nthread: int = 1, libname: str = None) -> Mf6API:
+def initialize_interfaces(wd:os.PathLike, nthread: int = 1, libname: Path | None = None) -> Mf6API:
     """Function to initialize the interfaces for modflowapi and phreeqcrm and returns the mf6rtm object"""
 
     yamlfile, dll = prep_to_run(wd, libname=libname)
@@ -187,10 +191,11 @@ class Mf6RTM(object):
             The PHREEQC BMI instance.
         charge_offset : float
             Offset for charge, initialized to 0.0.
-        min_concentration : float
-            Floor value applied to non-charge component concentrations before
-            passing to PhreeqcRM. Replaces negative (and near-zero) values.
-            Default is 1e-30. Set via set_min_concentration().
+        min_concentration : float or None
+            Floor value for truncation applied to non-charge component
+            concentrations before passing to PhreeqcRM. Replaces negative
+            (and near-zero) values.
+            Default is None (no truncation). Set via set_min_concentration().
         wd :os.PathLike
             The working directory path.
         sout_fname : str
@@ -198,9 +203,10 @@ class Mf6RTM(object):
         reactive : bool
             Flag indicating if the model is reactive, default is True.
         threshold : float
-            Previously "epsaqu"?, initialized to 0.0.
-            Appears to be the relative difference in component concentraitons to set the "diffmask"
-            that turns off reactions in upcomping timestep.
+            Appears to be the relative difference in component concentraitons to set
+            the "diffmask" that turns off reactions in upcomping timestep.
+            Initialized to 1e-10. NOTE that 1e-15 is the relative precision of float64.
+            Previously "epsaqu"?
         fixed_components : Any
             Fixed components, default is None.
         get_selected_output_on : bool
@@ -221,7 +227,6 @@ class Mf6RTM(object):
         self.mf6api = mf6api
         self.phreeqcbmi = phreeqcbmi
         self.charge_offset = 0.0
-        self.min_concentration = 1e-80
         self.wd = Path(wd)
         self.threshold = 1e-10
         self.fixed_components = None
@@ -237,6 +242,7 @@ class Mf6RTM(object):
 
         self.config = MF6RTMConfig.from_toml_file(self.wd/"mf6rtm.toml")
         self.reactive = self.config.reactive['enabled']
+        self.min_concentration = self.config.solver.get('min_concentration', None)
         self.set_emulator_training()
 
     def set_emulator_training(self) -> None:
@@ -336,15 +342,16 @@ class Mf6RTM(object):
         self.time_conversion = 1.0 / time_units_dict[time_units]
         self.phreeqcbmi.SetTimeConversion(self.time_conversion)
 
-    def set_min_concentration(self, min_concentration: float) -> None:
+    def set_min_concentration(self, min_concentration: float | None) -> None:
         """Set the floor value for non-charge concentrations passed to PhreeqcRM.
 
         Parameters
         ----------
-        min_concentration : float
+        min_concentration : float or None
             Any non-charge concentration below this value will be replaced with
             this value before calling SetConcentrations. Use a small positive
             number (e.g. 1e-30) to avoid PHREEQC divide-by-zero errors.
+            Pass None to disable filtering entirely.
         """
         self.min_concentration = min_concentration
 
@@ -505,7 +512,7 @@ class Mf6RTM(object):
         mf6_conc_array[:, inactive_idx] = self.previous_iteration_conc[:, inactive_idx]
         return mf6_conc_array
 
-    def _transfer_array_to_phreeqcrm(self) -> np.ndarray[Tuple[Any], np.float64]:
+    def _transfer_array_to_phreeqcrm(self) -> np.ndarray[tuple[Any], np.float64]:
         """Get the 2D concentration array (ncomps, nxyz) from mf6, convert units,
         reshape to 1D (ncomps*nxyz), and transfer to phreeqc bmi.
         Returns: 1D c_dbl_vect of length (ncomps*nxyz), 2D conc array from mf6
@@ -516,15 +523,16 @@ class Mf6RTM(object):
             concs = self.mf6api.get_value(f"{gwt_model_name}/X")
             if component.lower() == "charge":
                 concs -= self.charge_offset
-            else:
-                below = concs < utils.concentration_l_to_m3(self.min_concentration)
+            elif self.min_concentration is not None:
+                floor_m3 = utils.concentration_l_to_m3(self.min_concentration)
+                below = concs < floor_m3
                 if below.any():
                     print(
                         f"  [{component}] {below.sum()} cell(s) below "
-                        f"min_concentration (min={concs[below].min():.2e}); "
-                        f"clipping to {self.min_concentration:.2e}"
+                        f"min_concentration (min={utils.concentration_m3_to_l(concs[below].min()):.2e} mol/L); "
+                        f"clipping to {self.min_concentration:.2e} mol/L"
                     )
-                np.clip(concs, self.min_concentration, None, out=concs)
+                np.clip(concs, floor_m3, None, out=concs)
             mf6_conc_m3_array[i] = concs
 
         c_dbl_vect = utils.concentration_m3_to_l(mf6_conc_m3_array.ravel())
@@ -575,6 +583,8 @@ class Mf6RTM(object):
         # check sout was created
         assert self.selected_output._check_sout_exist(), f"{self.selected_output.sout_fname} not found"
 
+        if self.min_concentration is not None:
+            print(f"Truncating concentrations at {self.min_concentration:.2e} mol/L")
         print("Starting Solution at {0}".format(sim_start.strftime(DT_FMT)))
         ctime = self._set_ctime()
         etime = self._set_etime()
@@ -757,7 +767,7 @@ def mrbeaker() -> str:
 
     return mrbeaker
 
-def run_cmd(cwd: Optional[os.PathLike] = None) -> None:
+def run_cmd(cwd: str | os.PathLike | None = None) -> None:
     """Console entrypoint compatibility wrapper.
 
     When used as a console script the entrypoint calls `mf6rtm:run_cmd`
@@ -768,4 +778,4 @@ def run_cmd(cwd: Optional[os.PathLike] = None) -> None:
         cwd = os.getcwd()
 
     # run the solve function
-    solve(cwd)
+    solve(Path(cwd))

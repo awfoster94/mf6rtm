@@ -88,7 +88,11 @@ class PhreeqcBMI(phreeqcrm.BMIPhreeqcRM):
         # status = self.RunCells()
         # if status < 0:
         #     print('Error in RunCells: {0}'.format(status))
-        self.update()
+        # Suppress PhreeqcRM screen output during RunCells to avoid per-thread
+        # timing lines printed for each timestep when nthread > 1.
+        self.SetScreenOn(False)  # pragma: no cover
+        self.update()  # pragma: no cover
+        self.SetScreenOn(True)  # pragma: no cover
         td = (datetime.now() - sol_start).total_seconds() / 60.0
         message = f"{'Reactions':<15} | {'Stress period:':<15} {self.kper:<5} | {'Time step:':<15} {self.kstp:<10} | {'Completed in :':<10}  {td // 60:.0f} min {td % 60:10.2e} sec"
         self.LogMessage(message)
