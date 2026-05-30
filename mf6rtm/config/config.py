@@ -65,6 +65,9 @@ class MF6RTMConfig:
             "output": {
                 "output_format": "csv",
             },
+            "solver": {
+                "min_concentration": None,
+            },
         }
 
         for section, section_defaults in defaults.items():
@@ -231,7 +234,13 @@ class MF6RTMConfig:
                     print(attr_name, value)
                     result[attr_name] = value
             else:
-                result[attr_name] = value
+                if isinstance(value, dict):
+                    # TOML has no null type — omit None-valued keys
+                    filtered = {k: v for k, v in value.items() if v is not None}
+                    if filtered:
+                        result[attr_name] = filtered
+                else:
+                    result[attr_name] = value
 
         # Add category groups to result if not empty
         for category, group_dict in category_groups.items():
@@ -341,8 +350,15 @@ class MF6RTMConfig:
             kwargs['output'] = {
                 'output_format': out_config.get('output_format', 'csv'),
             }
-        # Flatten everything *except* 'reactive'
-        remaining_dict = {k: v for k, v in config_dict.items() if k not in ['reactive',
+
+        if 'solver' in config_dict:
+            solver_config = config_dict['solver']
+            kwargs['solver'] = {
+                'min_concentration': solver_config.get('min_concentration', None),
+            }
+
+        # Flatten everything *except* known sections
+        remaining_dict = {k: v for k, v in config_dict.items() if k not in ['reactive', 'solver', 'output',
                                                                             # 'emulator'
                                                                             ]}
         flattened = flatten_dict(remaining_dict)
@@ -417,6 +433,8 @@ class MF6RTMConfig:
         lines.append(f"  Reaction timing: {self.reactive['timing']}")
         lines.append(f"  External files flag: {self.reactive['externalio']}")
         lines.append(f"  Emulator flag: {self.emulator['training_data']}")
+        min_conc = self.solver.get('min_concentration')
+        lines.append(f"  Min concentration: {min_conc:.2e} mol/L" if min_conc is not None else "  Min concentration: None (no clipping)")
         if self.reactive['timing'] == 'user' and self.reactive['tsteps']:
             lines.append(f"  User-defined time steps ({len(self.reactive['tsteps'])} total):")
             for kper, kstp in sorted(self.reactive['tsteps']):
