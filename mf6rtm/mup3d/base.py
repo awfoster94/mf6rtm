@@ -15,6 +15,8 @@ from typing import Union
 from pathlib import Path
 from contextlib import contextmanager
 
+import flopy
+
 from mf6rtm.simulation.solver import solve
 from mf6rtm.utils import utils
 from mf6rtm.config import MF6RTMConfig
@@ -359,6 +361,9 @@ class Mup3d(object):
         self.fixed_components = None
         self.componenth2o = False
         self.config = MF6RTMConfig() #default config
+        self._gwt_sim = None
+        self._gwt_name = None
+        self._diffusion_coeff = {}
 
         # Set grid parameters for DIS
         if all(param is not None for param in [nlay, nrow, ncol]):
@@ -930,13 +935,149 @@ class Mup3d(object):
         self.config.save_to_file(filepath=config_path)
         return config_path
 
+    def _update_gwt_stress_packages(self) -> None:
+        """Wire equilibrated boundary chemistry into GWF stress package SPDs.
+
+        For each ChemStress on the model, extends the corresponding flopy GWF
+        stress package SPD records with component concentrations as auxiliary
+        variables. Must be called after initialize() and set_chem_stress().
+        """
+        if self.components is None:
+            raise RuntimeError(
+                "Call model.initialize() before write_simulation()."
+            )
+
+        gwf_name = next(
+            n for n in self._gwt_sim.model_names
+            if self._gwt_sim.get_model(n).model_type == 'gwf6'
+        )
+        gwf = self._gwt_sim.get_model(gwf_name)
+
+        chem_stresses = [
+            v for v in vars(self).values()
+            if isinstance(v, ChemStress) and getattr(v, 'data', None) is not None
+        ]
+
+        for cs in chem_stresses:
+            pkg = gwf.get_package(cs.packnme.lower())
+            if pkg is None:
+                raise ValueError(
+                    f"Package '{cs.packnme}' not found in GWF model '{gwf_name}'. "
+                    "Ensure ChemStress name matches the flopy package pname exactly."
+                )
+
+            spd = pkg.stress_period_data.get_data()
+            ncomps = len(self.components)
+            updated_spd = {}
+            for sp, records in spd.items():
+                updated = []
+                for i, rec in enumerate(records):
+                    concs = cs.data.get(i, [0.0] * ncomps)
+                    updated.append(tuple(rec) + tuple(concs))
+                updated_spd[sp] = updated
+            pkg.stress_period_data.set_data(updated_spd)
+            pkg.auxiliary = self.components
+
+    def _build_reactive_gwt_models(self) -> None:
+        """Clone the conservative tracer GWT into N reactive GWT models.
+
+        For each PHREEQC component, creates a flopy GWT model named after
+        the component, populated from the reference GWT (ADV, DSP, OC) with
+        component-specific IC (from self.sconc) and SSM (from ChemStress).
+        The conservative tracer GWT is removed via sim.remove_model().
+        """
+        gwt_ref = self._gwt_sim.get_model(self._gwt_name)
+        gwf_name = next(
+            n for n in self._gwt_sim.model_names
+            if self._gwt_sim.get_model(n).model_type == 'gwf6'
+        )
+
+        chem_stresses = [
+            v for v in vars(self).values()
+            if isinstance(v, ChemStress) and getattr(v, 'data', None) is not None
+        ]
+
+        for i, component in enumerate(self.components):
+            gwt = flopy.mf6.ModflowGwt(
+                self._gwt_sim, modelname=component, model_ws=str(self.wd)
+            )
+
+            # ADV — copy verbatim
+            if gwt_ref.get_package('adv') is not None:
+                flopy.mf6.ModflowGwtadv(
+                    gwt, scheme=gwt_ref.adv.scheme.get_data()
+                )
+
+            # DSP — dispersivity from reference, diffc per component (default 0)
+            if gwt_ref.get_package('dsp') is not None:
+                diffc = self._diffusion_coeff.get(component, None)
+                if diffc is None:
+                    warnings.warn(
+                        f"diffc not set for component '{component}', defaulting to 0. "
+                        "Set via model.set_diffusion_coeff().",
+                        stacklevel=2,
+                    )
+                    diffc = 0.0
+                dsp_kwargs = dict(diffc=diffc)
+                for attr in ('alh', 'ath1', 'ath2', 'atv'):
+                    pkg_attr = getattr(gwt_ref.dsp, attr, None)
+                    if pkg_attr is not None:
+                        try:
+                            dsp_kwargs[attr] = pkg_attr.get_data()
+                        except Exception:
+                            pass
+                flopy.mf6.ModflowGwtdsp(gwt, **dsp_kwargs)
+
+            # IC — equilibrated initial concentrations for this component
+            flopy.mf6.ModflowGwtic(gwt, strt=self.sconc[i])
+
+            # SSM — rebuilt from ChemStress objects
+            if chem_stresses:
+                sources = [[cs.packnme, 'AUX', component] for cs in chem_stresses]
+                flopy.mf6.ModflowGwtssm(gwt, sources=sources)
+
+            # OC — copy verbatim if present
+            if gwt_ref.get_package('oc') is not None:
+                oc_ref = gwt_ref.oc
+                flopy.mf6.ModflowGwtoc(
+                    gwt,
+                    budget_filerecord=f'{component}.cbc',
+                    concentration_filerecord=f'{component}.ucn',
+                    saverecord=oc_ref.saverecord.get_data(),
+                    printrecord=(
+                        oc_ref.printrecord.get_data()
+                        if oc_ref.printrecord is not None else None
+                    ),
+                )
+
+            # GWF-GWT flow model interface exchange
+            flopy.mf6.ModflowGwfgwt(
+                self._gwt_sim,
+                exgtype='GWF6-GWT6',
+                exgmnamea=gwf_name,
+                exgmnameb=component,
+                filename=f'{gwf_name}-{component}.gwfgwt',
+            )
+
+        # Remove conservative tracer GWT
+        self._gwt_sim.remove_model(self._gwt_name)
+
     def write_simulation(self):
-        """Write phreqcrm simulation and configuration files
+        """Write phreqcrm simulation and configuration files.
+
+        When the instance was created via from_mf6(), also clones the
+        conservative tracer GWT into reactive GWT models, wires stress package
+        auxiliary variables, and writes the full MF6 simulation to self.wd.
 
         Returns
         -------
         None
         """
+        if self._gwt_sim is not None:
+            self._update_gwt_stress_packages()
+            self._build_reactive_gwt_models()
+            self._gwt_sim.set_sim_path(str(self.wd))
+            self._gwt_sim.write_simulation()
         self._write_phreeqc_init_file()
         if self.config.reactive['externalio']:
             self.write_internal_parameters()
@@ -976,83 +1117,99 @@ class Mup3d(object):
         phreeqcrm.PhreeqcRM : PhreeqcRM class documentation.
         """
         print('Initializing ChemStress')
-        # check if self has a an attribute that is a class ChemStress but without knowing the attribute name
         chem_stress = [attr for attr in dir(self) if isinstance(getattr(self, attr), ChemStress)]
-
         assert len(chem_stress) > 0, 'No ChemStress attribute found in self'
 
-        # Get total number of grid cells affected by the stress period
-        nxyz_spd = len(getattr(self, attr).sol_spd)
+        sol_spd = getattr(self, attr).sol_spd
 
-        phreeqc_rm = phreeqcrm.PhreeqcRM(nxyz_spd, nthreads)
-        status = phreeqc_rm.SetComponentH2O(self.componenth2o)
-        phreeqc_rm.UseSolutionDensityVolume(False)
+        if isinstance(sol_spd, dict):
+            # Per-stress-period chemistry: {sp: [sol_per_cell]}
+            # Collect unique solution numbers across all periods, run PHREEQC once
+            all_solutions = []
+            for sp_sols in sol_spd.values():
+                all_solutions.extend(sp_sols)
+            unique_sols = list(dict.fromkeys(all_solutions))  # ordered unique
+            nxyz_spd = len(unique_sols)
 
-        # Set concentration units
-        status = phreeqc_rm.SetUnitsSolution(2)
+            phreeqc_rm = phreeqcrm.PhreeqcRM(nxyz_spd, nthreads)
+            status = phreeqc_rm.SetComponentH2O(self.componenth2o)
+            phreeqc_rm.UseSolutionDensityVolume(False)
+            status = phreeqc_rm.SetUnitsSolution(2)
+            poro = np.full((nxyz_spd), 1.)
+            status = phreeqc_rm.SetPorosity(poro)
+            status = phreeqc_rm.SetPrintChemistryMask(np.full((nxyz_spd), 1))
+            status = phreeqc_rm.SetPrintChemistryOn(False, True, False)
+            status = phreeqc_rm.LoadDatabase(self.database)
+            status = phreeqc_rm.RunFile(True, True, True, self.phinp)
+            input = "DELETE; -all"
+            status = phreeqc_rm.RunString(True, False, True, input)
+            ncomps = phreeqc_rm.FindComponents()
+            components = list(phreeqc_rm.GetComponents())
 
-        poro = np.full((nxyz_spd), 1.)
-        status = phreeqc_rm.SetPorosity(poro)
-        print_chemistry_mask = np.full((nxyz_spd), 1)
-        status = phreeqc_rm.SetPrintChemistryMask(print_chemistry_mask)
-        nchem = phreeqc_rm.GetChemistryCellCount()
+            ic1 = [-1] * nxyz_spd * 7
+            for e, sol in enumerate(unique_sols):
+                ic1[e] = sol
+            status = phreeqc_rm.InitialPhreeqc2Module(ic1)
+            status = phreeqc_rm.SetTime(0.0)
+            status = phreeqc_rm.SetTimeStep(0.0)
 
-        # Set printing of chemistry file
-        status = phreeqc_rm.SetPrintChemistryOn(False, True, False)  # workers, initial_phreeqc, utility
+            c_dbl_vect = utils.concentration_l_to_m3(phreeqc_rm.GetConcentrations())
+            c_dbl_vect = [c_dbl_vect[i:i + nxyz_spd] for i in range(0, len(c_dbl_vect), nxyz_spd)]
+            for i, c in enumerate(components):
+                if c.lower() == 'charge':
+                    c_dbl_vect[i] += self.charge_offset
 
-        # Load database
-        status = phreeqc_rm.LoadDatabase(self.database)
-        status = phreeqc_rm.RunFile(True, True, True, self.phinp)
+            # Map solution number → concentrations
+            sol_to_concs = {sol: [arr[j] for arr in c_dbl_vect]
+                            for j, sol in enumerate(unique_sols)}
 
-        # Clear contents of workers and utility
-        input = "DELETE; -all"
-        status = phreeqc_rm.RunString(True, False, True, input)
+            # Build nested {sp: {cell_i: concs}} data structure
+            sconc = {
+                sp: {cell_i: sol_to_concs[sol]
+                     for cell_i, sol in enumerate(sols)}
+                for sp, sols in sol_spd.items()
+            }
 
-        # Get component information - these two functions need to be invoked to find comps
-        ncomps = phreeqc_rm.FindComponents()
-        components = list(phreeqc_rm.GetComponents())
+            status = phreeqc_rm.CloseFiles()
+            status = phreeqc_rm.MpiWorkerBreak()
 
-        # Transfer solutions and reactants from the InitialPhreeqc instance to
-        # the reaction-module workers. See https://usgs-coupled.github.io/phreeqcrm/namespacephreeqcrm.html#ac3d7e7db76abda97a3d11b3ff1903322
-        ic1 = [-1] * nxyz_spd * 7
-        for e, i in enumerate(getattr(self, attr).sol_spd):
-            # TODO: modify to conform to the index, element convention
-            #       (i and e are reversed in line above)
-            ic1[e] = i  # Solution 1
-            # TODO: implment other ic1 blocks
-            # ic1[nxyz_spd + i]     = -1  # Equilibrium phases none
-            # ic1[2 * nxyz_spd + i] =  -1  # Exchange 1
-            # ic1[3 * nxyz_spd + i] = -1  # Surface none
-            # ic1[4 * nxyz_spd + i] = -1  # Gas phase none
-            # ic1[5 * nxyz_spd + i] = -1  # Solid solutions none
-            # ic1[6 * nxyz_spd + i] = -1  # Kinetics none
-        status = phreeqc_rm.InitialPhreeqc2Module(ic1)
+        else:
+            # Original list path — same chemistry for all stress periods
+            nxyz_spd = len(sol_spd)
 
-        # Initial equilibration of cells
-        time = 0.0
-        time_step = 0.0
-        status = phreeqc_rm.SetTime(time)
-        status = phreeqc_rm.SetTimeStep(time_step)
+            phreeqc_rm = phreeqcrm.PhreeqcRM(nxyz_spd, nthreads)
+            status = phreeqc_rm.SetComponentH2O(self.componenth2o)
+            phreeqc_rm.UseSolutionDensityVolume(False)
+            status = phreeqc_rm.SetUnitsSolution(2)
+            poro = np.full((nxyz_spd), 1.)
+            status = phreeqc_rm.SetPorosity(poro)
+            status = phreeqc_rm.SetPrintChemistryMask(np.full((nxyz_spd), 1))
+            status = phreeqc_rm.SetPrintChemistryOn(False, True, False)
+            status = phreeqc_rm.LoadDatabase(self.database)
+            status = phreeqc_rm.RunFile(True, True, True, self.phinp)
+            input = "DELETE; -all"
+            status = phreeqc_rm.RunString(True, False, True, input)
+            ncomps = phreeqc_rm.FindComponents()
+            components = list(phreeqc_rm.GetComponents())
 
-        # status = phreeqc_rm.RunCells()
-        c_dbl_vect = phreeqc_rm.GetConcentrations()
-        c_dbl_vect = utils.concentration_l_to_m3(c_dbl_vect)
+            ic1 = [-1] * nxyz_spd * 7
+            for e, i in enumerate(sol_spd):
+                ic1[e] = i
+            status = phreeqc_rm.InitialPhreeqc2Module(ic1)
+            status = phreeqc_rm.SetTime(0.0)
+            status = phreeqc_rm.SetTimeStep(0.0)
 
-        c_dbl_vect = [c_dbl_vect[i:i + nxyz_spd] for i in range(0, len(c_dbl_vect), nxyz_spd)]
+            c_dbl_vect = utils.concentration_l_to_m3(phreeqc_rm.GetConcentrations())
+            c_dbl_vect = [c_dbl_vect[i:i + nxyz_spd] for i in range(0, len(c_dbl_vect), nxyz_spd)]
+            for i, c in enumerate(components):
+                if c.lower() == 'charge':
+                    c_dbl_vect[i] += self.charge_offset
 
-        # find charge in c_dbl_vect and add charge_offset
-        for i, c in enumerate(components):
-            if c.lower() == 'charge':
-                c_dbl_vect[i] += self.charge_offset
+            sconc = {i: [arr[i] for arr in c_dbl_vect] for i in range(nxyz_spd)}
 
-        sconc = {}
-        for i in range(nxyz_spd):
-            sconc[i] = [array[i] for array in c_dbl_vect]
+            status = phreeqc_rm.CloseFiles()
+            status = phreeqc_rm.MpiWorkerBreak()
 
-        status = phreeqc_rm.CloseFiles()
-        status = phreeqc_rm.MpiWorkerBreak()
-
-        # set as attribute
         setattr(getattr(self, attr), 'data', sconc)
         setattr(getattr(self, attr), 'auxiliary', components)
         print(f'ChemStress {attr} initialized')
@@ -1270,6 +1427,91 @@ class Mup3d(object):
                 setattr(instance, attr, value)
 
         print(f"Loaded Mup3d model from {fname}")
+        return instance
+
+    def set_diffusion_coeff(self, diffusion_coeff: dict) -> None:
+        """Set molecular diffusion coefficients per PHREEQC component.
+
+        Parameters
+        ----------
+        diffusion_coeff : dict
+            Mapping of component name to diffusion coefficient in m²/s,
+            e.g. ``{'Ca': 0.792e-9, 'Cl': 2.032e-9}``. Components not listed
+            default to 0 (no diffusion) with a warning at write time.
+        """
+        self._diffusion_coeff = diffusion_coeff
+
+    @classmethod
+    def from_mf6(cls, sim, solutions, name=None, gwf_name=None, gwt_name=None):
+        """Create a Mup3d instance from an existing flopy MFSimulation.
+
+        Grid dimensions are extracted automatically from the GWF model.
+        The conservative tracer GWT model is stored as a template and will
+        be cloned into N reactive GWT models (one per PHREEQC component)
+        when ``write_simulation()`` is called.
+
+        Parameters
+        ----------
+        sim : flopy.mf6.MFSimulation
+            Loaded flopy simulation containing at least one GWF and one GWT model.
+        solutions : Solutions
+            Geochemical solutions for the reactive transport model.
+        name : str, optional
+            Model name. Defaults to None.
+        gwf_name : str, optional
+            Name of the GWF model. Defaults to the first model in sim.
+        gwt_name : str, optional
+            Name of the conservative tracer GWT model to use as template.
+            Required when the simulation contains more than one GWT model.
+
+        Returns
+        -------
+        Mup3d
+        """
+        # Resolve GWF model
+        gwf = sim.get_model(gwf_name) if gwf_name else sim.get_model(sim.model_names[0])
+
+        # Detect grid type and extract dims
+        distype = gwf.get_grid_type().name
+        if distype == 'DIS':
+            nlay = int(gwf.dis.nlay.data)
+            nrow = int(gwf.dis.nrow.data)
+            ncol = int(gwf.dis.ncol.data)
+            instance = cls(name, solutions, nlay=nlay, nrow=nrow, ncol=ncol)
+        elif distype == 'DISV':
+            nlay = int(gwf.disv.nlay.data)
+            ncpl = int(gwf.disv.ncpl.data)
+            instance = cls(name, solutions, nlay=nlay, ncpl=ncpl)
+        else:
+            raise ValueError(
+                f"Grid type '{distype}' is not supported by mf6rtm. "
+                "Only DIS and DISV are supported."
+            )
+
+        # Resolve GWT template
+        gwt_models = [n for n in sim.model_names if sim.get_model(n).model_type == 'gwt6']
+        if len(gwt_models) == 0:
+            raise ValueError("No GWT model found in the simulation.")
+        elif len(gwt_models) == 1:
+            gwt_name = gwt_models[0]
+        elif gwt_name is None:
+            raise ValueError(
+                f"Multiple GWT models found {gwt_models}. "
+                "Specify gwt_name to select the conservative tracer template."
+            )
+
+        # Auto-set working directory as sibling 'reactive/' of sim workspace
+        sim_ws_abs = os.path.abspath(sim.sim_ws)
+        default_wd = os.path.join(os.path.dirname(sim_ws_abs), 'reactive')
+        warnings.warn(
+            f"Working directory not set. Defaulting to '{default_wd}'. "
+            "Call set_wd() before write_simulation() to override.",
+            stacklevel=2,
+        )
+        instance.set_wd(default_wd)
+
+        instance._gwt_sim = sim
+        instance._gwt_name = gwt_name
         return instance
 
     def write_external_files_layered(self,
