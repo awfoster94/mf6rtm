@@ -201,4 +201,3 @@ pyrightconfig.json
 /autotest/test05/*
 .vscode/settings.json
 /benchmark/ex6
-benchmark/bin/
