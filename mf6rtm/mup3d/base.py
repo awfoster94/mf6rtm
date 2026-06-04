@@ -891,7 +891,7 @@ class Mup3d(object):
             self.sconc[c] = get_conc
 
         self.set_reaction_temp()
-        self.write_simulation()
+        self._write_phreeqc_files()
         print('Phreeqc initialized')
         return
 
@@ -966,17 +966,31 @@ class Mup3d(object):
                     "Ensure ChemStress name matches the flopy package pname exactly."
                 )
 
+            # Count any existing auxiliary columns (e.g. a conservative tracer
+            # aux var). These trail the base SPD fields and are stripped before
+            # the component concentrations are appended.
+            aux_data = pkg.auxiliary.get_data() if pkg.auxiliary is not None else None
+            if aux_data is not None:
+                n_existing_aux = sum(len(list(row)) - 1 for row in aux_data)
+            else:
+                n_existing_aux = 0
+
             spd = pkg.stress_period_data.get_data()
             ncomps = len(self.components)
             updated_spd = {}
             for sp, records in spd.items():
                 updated = []
                 for i, rec in enumerate(records):
+                    base = tuple(rec)
+                    if n_existing_aux > 0:
+                        base = base[:-n_existing_aux]
                     concs = cs.data.get(i, [0.0] * ncomps)
-                    updated.append(tuple(rec) + tuple(concs))
+                    updated.append(base + tuple(concs))
                 updated_spd[sp] = updated
-            pkg.stress_period_data.set_data(updated_spd)
+            # auxiliary must be set before the data so flopy rebuilds the SPD
+            # dtype with the component columns before validating the records.
             pkg.auxiliary = self.components
+            pkg.stress_period_data.set_data(updated_spd)
 
     def _build_reactive_gwt_models(self) -> None:
         """Clone the conservative tracer GWT into N reactive GWT models.
@@ -997,10 +1011,67 @@ class Mup3d(object):
             if isinstance(v, ChemStress) and getattr(v, 'data', None) is not None
         ]
 
-        for i, component in enumerate(self.components):
-            gwt = flopy.mf6.ModflowGwt(
-                self._gwt_sim, modelname=component, model_ws=str(self.wd)
+        gwf = self._gwt_sim.get_model(gwf_name)
+
+        # Find the conservative tracer's IMS to use as a settings template for
+        # the per-component reactive IMS packages. The solutiongroup recarray
+        # maps each IMS file to its models, e.g. ('ims6', 'gwt.ims', 'gwt').
+        slngroup = self._gwt_sim.name_file.solutiongroup.get_data(0)
+        ims_fname = None
+        for row in slngroup:
+            fields = [f for f in list(row) if f is not None]
+            if self._gwt_name in fields[2:]:
+                ims_fname = fields[1]
+                break
+        if ims_fname is None:
+            raise ValueError(
+                f"Could not find the IMS solution package for GWT model "
+                f"'{self._gwt_name}'."
             )
+        ims_settings = self._clone_ims_settings(
+            self._gwt_sim.get_solution_package(ims_fname)
+        )
+
+        for component in self.components:
+            gwt = flopy.mf6.ModflowGwt(
+                self._gwt_sim, modelname=component,
+            )
+
+            # IMS — one per component, cloned from the tracer's solver settings
+            ims = flopy.mf6.ModflowIms(
+                self._gwt_sim, filename=f"{component}.ims", **ims_settings
+            )
+            self._gwt_sim.register_ims_package(ims, [component])
+
+            # DIS — copy from GWF (shared grid)
+            if gwf.get_package('dis') is not None:
+                d = gwf.dis
+                flopy.mf6.ModflowGwtdis(
+                    gwt,
+                    nlay=d.nlay.get_data(),
+                    nrow=d.nrow.get_data(),
+                    ncol=d.ncol.get_data(),
+                    delr=d.delr.get_data(),
+                    delc=d.delc.get_data(),
+                    top=d.top.get_data(),
+                    botm=d.botm.get_data(),
+                    idomain=d.idomain.get_data() if d.idomain is not None else None,
+                    filename=f"{component}.dis",
+                )
+            elif gwf.get_package('disv') is not None:
+                d = gwf.disv
+                flopy.mf6.ModflowGwtdisv(
+                    gwt,
+                    nlay=d.nlay.get_data(),
+                    ncpl=d.ncpl.get_data(),
+                    nvert=d.nvert.get_data(),
+                    vertices=d.vertices.get_data(),
+                    cell2d=d.cell2d.get_data(),
+                    top=d.top.get_data(),
+                    botm=d.botm.get_data(),
+                    idomain=d.idomain.get_data() if d.idomain is not None else None,
+                    filename=f"{component}.disv",
+                )
 
             # ADV — copy verbatim
             if gwt_ref.get_package('adv') is not None:
@@ -1026,15 +1097,29 @@ class Mup3d(object):
                             dsp_kwargs[attr] = pkg_attr.get_data()
                         except Exception:
                             pass
-                flopy.mf6.ModflowGwtdsp(gwt, **dsp_kwargs)
+                flopy.mf6.ModflowGwtdsp(gwt, filename=f"{component}.dsp", **dsp_kwargs)
 
             # IC — equilibrated initial concentrations for this component
-            flopy.mf6.ModflowGwtic(gwt, strt=self.sconc[i])
+            flopy.mf6.ModflowGwtic(gwt, strt=self.sconc[component], filename=f"{component}.ic")
+
+            # MST — copy porosity and decay from reference
+            if gwt_ref.get_package('mst') is not None:
+                mst_ref = gwt_ref.mst
+                mst_kwargs = {}
+                for attr in ('porosity', 'decay', 'decay_sorbed', 'bulk_density',
+                             'distcoef', 'sp2', 'first_order_decay', 'zero_order_decay'):
+                    pkg_attr = getattr(mst_ref, attr, None)
+                    if pkg_attr is not None:
+                        try:
+                            mst_kwargs[attr] = pkg_attr.get_data()
+                        except Exception:
+                            pass
+                flopy.mf6.ModflowGwtmst(gwt, filename=f"{component}.mst", **mst_kwargs)
 
             # SSM — rebuilt from ChemStress objects
             if chem_stresses:
                 sources = [[cs.packnme, 'AUX', component] for cs in chem_stresses]
-                flopy.mf6.ModflowGwtssm(gwt, sources=sources)
+                flopy.mf6.ModflowGwtssm(gwt, sources=sources, filename=f"{component}.ssm")
 
             # OC — copy verbatim if present
             if gwt_ref.get_package('oc') is not None:
@@ -1056,11 +1141,70 @@ class Mup3d(object):
                 exgtype='GWF6-GWT6',
                 exgmnamea=gwf_name,
                 exgmnameb=component,
-                filename=f'{gwf_name}-{component}.gwfgwt',
+                filename=f'{component}.gwfgwt',
             )
 
-        # Remove conservative tracer GWT
+        # Drop the tracer's orphaned GWF-GWT exchange. remove_model() cleans the
+        # mfsim.nam exchanges block but leaves the exchange package object, which
+        # flopy tracks in both _exchange_files and _other_files and would
+        # otherwise still write to disk as a stale file.
+        for container in (self._gwt_sim._exchange_files,
+                          self._gwt_sim._other_files):
+            for fname, pkg in list(container.items()):
+                if self._gwt_name in (getattr(pkg, 'exgmnamea', None),
+                                      getattr(pkg, 'exgmnameb', None)):
+                    del container[fname]
+
         self._gwt_sim.remove_model(self._gwt_name)
+
+        # Remove the tracer's now-orphaned IMS: drop the package file and the
+        # empty solutiongroup row that remove_model() leaves behind.
+        if ims_fname in self._gwt_sim._solution_files:
+            del self._gwt_sim._solution_files[ims_fname]
+        sg = self._gwt_sim.name_file.solutiongroup.get_data(0)
+        kept = [
+            tuple(f for f in row if f is not None)
+            for row in sg
+            if tuple(row)[1] != ims_fname
+        ]
+        self._gwt_sim.name_file.solutiongroup.set_data(kept, 0)
+
+    def _clone_ims_settings(self, ims_template) -> dict:
+        """Extract solver settings from an IMS package into a kwargs dict.
+
+        Used to replicate the conservative tracer's IMS configuration onto each
+        per-component reactive IMS. rcloserecord comes back as a recarray, so it
+        is special-cased to the scalar inner_rclose value.
+        """
+        settings = {}
+        names = [
+            'print_option', 'complexity', 'outer_dvclose', 'outer_maximum',
+            'under_relaxation', 'under_relaxation_theta', 'under_relaxation_kappa',
+            'under_relaxation_gamma', 'under_relaxation_momentum',
+            'backtracking_number', 'inner_maximum', 'inner_dvclose',
+            'linear_acceleration', 'relaxation_factor', 'scaling_method',
+            'reordering_method', 'preconditioner_levels',
+            'preconditioner_drop_tolerance', 'number_orthogonalizations',
+        ]
+        for name in names:
+            v = getattr(ims_template, name, None)
+            if v is None:
+                continue
+            try:
+                d = v.get_data()
+            except Exception:
+                continue
+            if d is not None:
+                settings[name] = d
+        rc = getattr(ims_template, 'rcloserecord', None)
+        if rc is not None:
+            try:
+                d = rc.get_data()
+                if d is not None and len(d) > 0:
+                    settings['rcloserecord'] = float(d[0]['inner_rclose'])
+            except Exception:
+                pass
+        return settings
 
     def write_simulation(self):
         """Write phreqcrm simulation and configuration files.
@@ -1078,12 +1222,21 @@ class Mup3d(object):
             self._build_reactive_gwt_models()
             self._gwt_sim.set_sim_path(str(self.wd))
             self._gwt_sim.write_simulation()
+        self._write_phreeqc_files()
+        print(f"Simulation saved in {self.wd}")
+
+    def _write_phreeqc_files(self):
+        """Write the PhreeqcRM init file, internal/external parameters and config.
+
+        This is the chemistry-side output, independent of any MF6 flopy build.
+        Called both by initialize() (which only needs the PHREEQC files) and by
+        write_simulation() (which also builds the MF6 simulation).
+        """
         self._write_phreeqc_init_file()
         if self.config.reactive['externalio']:
             self.write_internal_parameters()
             self.write_external_files_layered()
         self.save_config()
-        print(f"Simulation saved in {self.wd}")
         return
 
     def initialize_chem_stress(
@@ -1501,7 +1654,7 @@ class Mup3d(object):
             )
 
         # Auto-set working directory as sibling 'reactive/' of sim workspace
-        sim_ws_abs = os.path.abspath(sim.sim_ws)
+        sim_ws_abs = os.path.abspath(sim.sim_path)
         default_wd = os.path.join(os.path.dirname(sim_ws_abs), 'reactive')
         warnings.warn(
             f"Working directory not set. Defaulting to '{default_wd}'. "
