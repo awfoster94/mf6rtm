@@ -200,21 +200,36 @@ class ChemStress():
     ----------
     packnme : str
         Name of the package.
+    type : str
+        Boundary coupling type: ``'aux'`` (GWF stress package + GWT SSM),
+        ``'cnc'`` (GWT constant-concentration), or ``'src'`` (GWT mass-loading).
+        Default is ``'aux'``.
     sol_spd : list, optional
-        List of solution stress period data. Default is None.
-    packtype : str, optional
-        Type of the package. Default is None.
+        List of solution indices (one per boundary cell). Default is None.
+    cells : list, optional
+        List of cellids — required for cnc/src; for aux the cells come from
+        the GWF package SPD. Default is None.
+
+    Notes
+    -----
+    # TODO: advanced MF6 transport packages (LKT, MVT, UZT, SFT, MWT, IST) are
+    # not yet supported. These require per-component re-equilibration analogous
+    # to the aux/cnc path and will be added in a future release.
     """
-    def __init__(self, packnme) -> None:
+    def __init__(self, packnme, type='aux') -> None:
         self.packnme = packnme
+        self.type = type
         self.sol_spd = None
-        self.packtype = None
+        self.cells = None
 
     def set_spd(self, sol_spd):
         self.sol_spd = sol_spd
 
-    def set_packtype(self, packtype):
-        self.packtype = packtype
+    def set_type(self, type):
+        self.type = type
+
+    def set_cells(self, cells):
+        self.cells = cells
 
 
 phase_types = {
@@ -956,6 +971,7 @@ class Mup3d(object):
         chem_stresses = [
             v for v in vars(self).values()
             if isinstance(v, ChemStress) and getattr(v, 'data', None) is not None
+            and v.type == 'aux'
         ]
 
         for cs in chem_stresses:
@@ -1006,12 +1022,30 @@ class Mup3d(object):
             if self._gwt_sim.get_model(n).model_type == 'gwf6'
         )
 
-        chem_stresses = [
+        all_chem_stresses = [
             v for v in vars(self).values()
             if isinstance(v, ChemStress) and getattr(v, 'data', None) is not None
         ]
+        aux_stresses = [cs for cs in all_chem_stresses if cs.type == 'aux']
+        nonaux_stresses = [cs for cs in all_chem_stresses if cs.type in ('cnc', 'src')]
 
         gwf = self._gwt_sim.get_model(gwf_name)
+
+        # Warn once about GWT packages on the tracer model that won't be replicated.
+        # Advanced packages (LKT/MVT/UZT/SFT/MWT/IST) carry component-specific
+        # concentrations and need per-component re-equilibration — not a blind copy.
+        # TODO: add support for LKT, MVT, UZT, SFT, MWT, IST in a future release.
+        handled_pkg_types = {
+            'dis', 'disv', 'disu', 'adv', 'dsp', 'ic', 'mst', 'ssm', 'oc', 'cnc', 'src'
+        }
+        unhandled = {p.package_type for p in gwt_ref.packagelist} - handled_pkg_types
+        for ptype in unhandled:
+            warnings.warn(
+                f"GWT package '{ptype}' on the tracer model is not replicated to the "
+                "reactive GWT models. Advanced-transport packages "
+                "(LKT/MVT/UZT/SFT/MWT/IST) are not yet supported by from_mf6().",
+                stacklevel=2,
+            )
 
         # Find the conservative tracer's IMS to use as a settings template for
         # the per-component reactive IMS packages. The solutiongroup recarray
@@ -1116,10 +1150,37 @@ class Mup3d(object):
                             pass
                 flopy.mf6.ModflowGwtmst(gwt, filename=f"{component}.mst", **mst_kwargs)
 
-            # SSM — rebuilt from ChemStress objects
-            if chem_stresses:
-                sources = [[cs.packnme, 'AUX', component] for cs in chem_stresses]
+            # SSM — rebuilt from aux-type ChemStress objects only
+            if aux_stresses:
+                sources = [[cs.packnme, 'AUX', component] for cs in aux_stresses]
                 flopy.mf6.ModflowGwtssm(gwt, sources=sources, filename=f"{component}.ssm")
+
+            # CNC / SRC — per-component constant-concentration or mass-loading packages
+            for cs in nonaux_stresses:
+                if cs.cells is None:
+                    raise ValueError(
+                        f"ChemStress '{cs.packnme}' has type='{cs.type}' but cells "
+                        "is not set. Call cs.set_cells() with a list of cellids."
+                    )
+                j = self.components.index(component)
+                first_val = next(iter(cs.data.values()))
+                if isinstance(first_val, dict):
+                    # per-stress-period dict path: {sp: {cell_i: [concs]}}
+                    spd = {
+                        sp: [(cs.cells[i], concs[j]) for i, concs in sorted(pd.items())]
+                        for sp, pd in cs.data.items()
+                    }
+                else:
+                    # list path: {cell_i: [concs]} — same for all stress periods
+                    spd = [(cs.cells[i], cs.data[i][j]) for i in range(len(cs.cells))]
+                pkg_cls = (flopy.mf6.ModflowGwtcnc if cs.type == 'cnc'
+                           else flopy.mf6.ModflowGwtsrc)
+                pkg_cls(
+                    gwt,
+                    stress_period_data=spd,
+                    pname=cs.packnme,
+                    filename=f"{component}.{cs.packnme}.{cs.type}",
+                )
 
             # OC — copy verbatim if present
             if gwt_ref.get_package('oc') is not None:

@@ -196,26 +196,39 @@ class TestSurfaces:
 
 class TestChemStress:
     """Test suite for ChemStress class."""
-    
+
     def test_chem_stress_initialization(self):
-        """Test ChemStress initialization."""
+        """Test ChemStress defaults to aux type."""
         stress = ChemStress('WEL-1')
         assert stress.packnme == 'WEL-1'
+        assert stress.type == 'aux'
         assert stress.sol_spd is None
-        assert stress.packtype is None
-    
+        assert stress.cells is None
+
+    def test_chem_stress_cnc_type(self):
+        """Test explicit cnc type."""
+        stress = ChemStress('inflow', type='cnc')
+        assert stress.type == 'cnc'
+
     def test_set_spd(self):
         """Test setting stress period data."""
         stress = ChemStress('WEL-1')
         spd = [1, 2, 3, 4, 5]
         stress.set_spd(spd)
         assert stress.sol_spd == spd
-    
-    def test_set_packtype(self):
-        """Test setting package type."""
-        stress = ChemStress('WEL-1')
-        stress.set_packtype('WEL')
-        assert stress.packtype == 'WEL'
+
+    def test_set_type(self):
+        """Test set_type changes the coupling type."""
+        stress = ChemStress('inflow')
+        stress.set_type('src')
+        assert stress.type == 'src'
+
+    def test_set_cells(self):
+        """Test set_cells stores cellids."""
+        stress = ChemStress('inflow', type='cnc')
+        cells = [(0, 0, 0), (0, 0, 1)]
+        stress.set_cells(cells)
+        assert stress.cells == cells
 
 
 # ==================== Mup3d Tests ====================
@@ -744,4 +757,134 @@ class TestTransferArrayToPhreeqcRM:
         passed = mock.phreeqcbmi.SetConcentrations.call_args[0][0]
         result_m3 = passed * 1e3
         np.testing.assert_allclose(result_m3, concs - 1e-3)
+
+
+# ==================== from_mf6 Structural Tests ====================
+
+_BENCHMARK_DB = Path(__file__).parent.parent / 'benchmark' / 'database' / 'pht3d_datab.dat'
+
+
+@pytest.fixture
+def benchmark_database():
+    """Path to the benchmark pht3d_datab.dat — skipped if not present."""
+    if not _BENCHMARK_DB.exists():
+        pytest.skip("Benchmark database not found; skipping from_mf6 integration test")
+    return str(_BENCHMARK_DB)
+
+
+class TestFromMf6:
+    """Structural tests for Mup3d.from_mf6 — no MF6 run required."""
+
+    @staticmethod
+    def _build_minimal_sim(sim_ws):
+        """Minimal flopy sim: 3-cell GWF + tracer GWT with CHD aux + SSM."""
+        import flopy
+        sim = flopy.mf6.MFSimulation(
+            sim_name='test', sim_ws=str(sim_ws), exe_name='mf6'
+        )
+        flopy.mf6.ModflowTdis(sim, nper=1, perioddata=[(1.0, 1, 1.0)], time_units='days')
+
+        gwf = flopy.mf6.ModflowGwf(sim, modelname='gwf', save_flows=True)
+        ims_gwf = flopy.mf6.ModflowIms(sim, filename='gwf.ims')
+        sim.register_ims_package(ims_gwf, ['gwf'])
+
+        flopy.mf6.ModflowGwfdis(gwf, nlay=1, nrow=1, ncol=3,
+                                 delr=1.0, delc=1.0, top=0.0, botm=-1.0,
+                                 filename='gwf.dis')
+        flopy.mf6.ModflowGwfnpf(gwf, k=1.0, filename='gwf.npf')
+        flopy.mf6.ModflowGwfic(gwf, strt=1.0, filename='gwf.ic')
+        flopy.mf6.ModflowGwfchd(
+            gwf, stress_period_data=[[(0, 0, 0), 1.0, 1.0]],
+            auxiliary=['tracer'], pname='chdin', filename='gwf.chdin.chd',
+        )
+        flopy.mf6.ModflowGwfchd(
+            gwf, stress_period_data=[[(0, 0, 2), 0.0]],
+            pname='chdout', filename='gwf.chdout.chd',
+        )
+        flopy.mf6.ModflowGwfoc(gwf, head_filerecord='gwf.hds',
+                                budget_filerecord='gwf.cbb',
+                                saverecord=[('HEAD', 'ALL'), ('BUDGET', 'ALL')])
+
+        gwt = flopy.mf6.ModflowGwt(sim, modelname='gwt')
+        ims_gwt = flopy.mf6.ModflowIms(
+            sim, linear_acceleration='BICGSTAB', filename='gwt.ims'
+        )
+        sim.register_ims_package(ims_gwt, ['gwt'])
+
+        flopy.mf6.ModflowGwtdis(gwt, nlay=1, nrow=1, ncol=3,
+                                  delr=1.0, delc=1.0, top=0.0, botm=-1.0,
+                                  filename='gwt.dis')
+        flopy.mf6.ModflowGwtic(gwt, strt=0.0, filename='gwt.ic')
+        flopy.mf6.ModflowGwtssm(
+            gwt, sources=[['chdin', 'aux', 'tracer']], filename='gwt.ssm'
+        )
+        flopy.mf6.ModflowGwtadv(gwt, scheme='UPSTREAM')
+        flopy.mf6.ModflowGwtmst(gwt, porosity=0.3, filename='gwt.mst')
+        flopy.mf6.ModflowGwtoc(gwt, budget_filerecord='gwt.cbc',
+                                 concentration_filerecord='gwt.ucn',
+                                 saverecord=[('CONCENTRATION', 'ALL')])
+        flopy.mf6.ModflowGwfgwt(sim, exgtype='GWF6-GWT6',
+                                  exgmnamea='gwf', exgmnameb='gwt',
+                                  filename='gwf-gwt.gwfgwt')
+        return sim
+
+    def test_aux_and_cnc_file_structure(self, tmp_path, benchmark_database):
+        """write_simulation writes per-component CNC files and removes tracer GWT."""
+        sim_ws = tmp_path / 'conservative'
+        sim_ws.mkdir()
+        sim = self._build_minimal_sim(sim_ws)
+
+        solutions = Solutions({'Ca': [1e-4, 1e-3], 'Cl': [2e-4, 2e-3]})
+        solutions.set_ic(1)
+
+        model = Mup3d.from_mf6(sim, solutions, name='test', gwt_name='gwt')
+        model.set_database(benchmark_database)
+        model.initialize()
+
+        components = model.components
+        assert len(components) > 0
+
+        chdin_cs = ChemStress('chdin', type='aux')
+        chdin_cs.set_spd([2])
+        model.set_chem_stress(chdin_cs)
+
+        cnc_cs = ChemStress('cncout', type='cnc')
+        cnc_cs.set_spd([1])
+        cnc_cs.set_cells([(0, 0, 2)])
+        model.set_chem_stress(cnc_cs)
+
+        model.write_simulation()
+
+        written = set(os.listdir(model.wd))
+
+        # Tracer GWT model files must be gone
+        tracer_files = [f for f in written if f.startswith('gwt.') and not f.endswith('.ims')]
+        assert len(tracer_files) == 0, f'Tracer model files remain: {tracer_files}'
+
+        for c in components:
+            assert any(f.startswith(f'{c}.') for f in written), f'No GWT files for {c}'
+            assert f'{c}.ims' in written, f'Missing IMS for {c}'
+            assert f'{c}.cncout.cnc' in written, f'Missing CNC file for {c}'
+            assert f'{c}.gwfgwt' in written, f'Missing exchange for {c}'
+
+    def test_cnc_missing_cells_raises(self, tmp_path, benchmark_database):
+        """cnc ChemStress without set_cells raises ValueError at write_simulation."""
+        sim_ws = tmp_path / 'conservative'
+        sim_ws.mkdir()
+        sim = self._build_minimal_sim(sim_ws)
+
+        solutions = Solutions({'Ca': [1e-4, 1e-3], 'Cl': [2e-4, 2e-3]})
+        solutions.set_ic(1)
+
+        model = Mup3d.from_mf6(sim, solutions, name='test', gwt_name='gwt')
+        model.set_database(benchmark_database)
+        model.initialize()
+
+        cnc_cs = ChemStress('cncout', type='cnc')
+        cnc_cs.set_spd([1])
+        # intentionally omit set_cells
+        model.set_chem_stress(cnc_cs)
+
+        with pytest.raises(ValueError, match="cells is not set"):
+            model.write_simulation()
 
