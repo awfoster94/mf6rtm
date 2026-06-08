@@ -1154,6 +1154,8 @@ class Mup3d(object):
             if aux_stresses:
                 sources = [[cs.packnme, 'AUX', component] for cs in aux_stresses]
                 flopy.mf6.ModflowGwtssm(gwt, sources=sources, filename=f"{component}.ssm")
+            else: #if no aux we still need an empty ssm
+                flopy.mf6.ModflowGwtssm(gwt, filename=f"{component}.ssm")
 
             # CNC / SRC — per-component constant-concentration or mass-loading packages
             for cs in nonaux_stresses:
@@ -1282,6 +1284,7 @@ class Mup3d(object):
             self._update_gwt_stress_packages()
             self._build_reactive_gwt_models()
             self._gwt_sim.set_sim_path(str(self.wd))
+            self._gwt_sim.set_all_data_external()
             self._gwt_sim.write_simulation()
         self._write_phreeqc_files()
         print(f"Simulation saved in {self.wd}")
