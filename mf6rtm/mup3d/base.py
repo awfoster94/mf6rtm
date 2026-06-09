@@ -1836,15 +1836,11 @@ class Mup3d(object):
         status = phreeqcrm_yaml.YAMLRunString(True, False, True, input)
         if self.postfix is None:
             phreeqcrm_yaml.YAMLAddOutputVars("SolutionProperties", "true")
-            comps = [c for c in self.components if c.lower() not in ("h", "o", "charge")]
-            for comp in comps:
-                phreeqcrm_yaml.YAMLAddOutputVars("SolutionTotalMolalities", comp)
+            phreeqcrm_yaml.YAMLAddOutputVars("SolutionTotalMolalities", "true")
             if self.equilibrium_phases is not None:
-                for phase in self.equilibrium_phases.names:
-                    phreeqcrm_yaml.YAMLAddOutputVars("EquilibriumPhases", phase)
+                phreeqcrm_yaml.YAMLAddOutputVars("EquilibriumPhases", "true")
             if self.kinetic_phases is not None:
-                for phase in self.kinetic_phases.names:
-                    phreeqcrm_yaml.YAMLAddOutputVars("KineticReactants", phase)
+                phreeqcrm_yaml.YAMLAddOutputVars("KineticReactants", "true")   
         else:
             phreeqcrm_yaml.YAMLAddOutputVars("AddOutputVars", "true")
 
