@@ -446,7 +446,8 @@ class SelectedOutput:
             sout = self.__replace_inactive_cells_in_sout(sout, self.mf6rtm.diffmask)
         self._sout_k = sout  # save sout to a private attribute
         # add time to selected ouput
-        sout[0] = np.ones_like(sout[0]) * (self.mf6rtm.ctime + self.mf6rtm.time_step)
+
+        sout[0] = np.ones_like(sout[0]) * (self.mf6rtm.ctime)
         df = pd.DataFrame(columns=self.phreeqcbmi.soutdf.columns)
         for col, arr in zip(df.columns, sout):
             df[col] = arr
