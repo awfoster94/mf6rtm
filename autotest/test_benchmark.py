@@ -1160,8 +1160,8 @@ def compare_results(benchmarkdf, testdf, treshold = 0.01):
     assert benchmarkdf.shape == testdf.shape
     # assert both dataframes have the same columns
     assert benchmarkdf.columns.tolist() == testdf.columns.tolist()
-    # assert both dataframes have the same indices
-    assert benchmarkdf.index.tolist() == testdf.index.tolist()
+    # assert both dataframes have the same indices (allow float64 platform differences)
+    assert np.allclose(benchmarkdf.index.tolist(), testdf.index.tolist(), rtol=1e-10, atol=0)
     # iterate each column and each index and assert an absolute difference less than 0.01 
     for col in benchmarkdf.columns:
         checkerarr = [i < treshold for i in np.abs(benchmarkdf.loc[:, col].values - testdf.loc[:, col].values)]
