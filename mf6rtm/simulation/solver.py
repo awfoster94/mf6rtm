@@ -613,6 +613,7 @@ class Mf6RTM(object):
             self.get_saturation_from_mf6()
             # check_reactive_kstp()
             if self.is_reactive_tstep():
+                self.phreeqcbmi.SetSaturation(self.phreeqcbmi.sat_now) 
                 c_dbl_vect, mf6_conc_m3_array = self._transfer_array_to_phreeqcrm()
                 self.phreeqcbmi._get_kper_kstp_from_mf6api(self.mf6api)
                             # Moved from `_transfer_array_to_phreeqcrm()`
@@ -668,12 +669,12 @@ class Mf6RTM(object):
         try:
             self._finalize()
             success = True
-            print(mrbeaker())
+            # print(mrbeaker())
             print(
-                "\nMR BEAKER IMPORTANT MESSAGE: MODEL RUN FINISHED BUT CHECK THE RESULTS .. THEY ARE PROLY RUBBISH\n"
+                "\nMODEL RUN FINISHED BUT CHECK THE RESULTS\n"
             )
         except:
-            print("MR BEAKER IMPORTANT MESSAGE: SOMETHING WENT WRONG. BUMMER\n")
+            print("SOMETHING WENT WRONG. BUMMER\n")
             pass
         print(
             "Solution finished at {0}. Running time: {1:10.5G} mins".format(

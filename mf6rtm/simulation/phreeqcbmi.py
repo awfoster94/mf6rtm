@@ -61,7 +61,7 @@ class PhreeqcBMI(phreeqcrm.BMIPhreeqcRM):
         else:
             sat = [1] * self.GetGridCellCount()
 
-        self.SetSaturation(sat)
+        # self.SetSaturation(sat)
 
         # update which cells to run depending on conc change between tsteps
         if diffmask is not None:

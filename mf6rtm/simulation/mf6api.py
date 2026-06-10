@@ -84,9 +84,9 @@ class Mf6API(modflowapi.ModflowApi):
 
     def _check_num_fails(self):
         if self.num_fails > 0:
-            print("\nTransport failed to converge {0} times \n".format(self.num_fails))
+            print("\nMODFLOW 6 failed to converge {0} times \n".format(self.num_fails))
         else:
-            print("\nTransport converged successfully without any fails")
+            print("\nMODFLOW 6 converged successfully without any fails")
 
     @property
     def grid_type(self) -> str:
