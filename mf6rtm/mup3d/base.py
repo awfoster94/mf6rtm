@@ -402,7 +402,7 @@ class Mup3d(object):
             self.solutions.ic = [1]*self.nxyz
         if isinstance(self.solutions.ic, (int, float)):
             self.solutions.ic = np.reshape([self.solutions.ic]*self.nxyz, self.grid_shape)
-            print(self.solutions.ic.shape, self.nxyz, self.grid_shape)
+            # print(self.solutions.ic.shape, self.nxyz, self.grid_shape)
         assert self.solutions.ic.shape == self.grid_shape, (
             f'Initial conditions array must be an array of the shape ({self.grid_shape})'
             f'not {self.solutions.ic.shape}'
@@ -982,6 +982,12 @@ class Mup3d(object):
                     "Ensure ChemStress name matches the flopy package pname exactly."
                 )
 
+            # Array recharge stores aux as full grid arrays (one per auxiliary
+            # variable), not as per-cell records, so it needs its own path.
+            if pkg.package_type == "rcha":
+                self._set_rcha_aux(pkg, cs)
+                continue
+
             # Count any existing auxiliary columns (e.g. a conservative tracer
             # aux var). These trail the base SPD fields and are stripped before
             # the component concentrations are appended.
@@ -990,23 +996,72 @@ class Mup3d(object):
                 n_existing_aux = sum(len(list(row)) - 1 for row in aux_data)
             else:
                 n_existing_aux = 0
-
+            # Detect BOUNDNAMES: if present the last field of each SPD record
+            # is the bound name string and must be preserved around the aux strip.
+            has_boundnames = (
+                hasattr(pkg, 'boundnames')
+                and pkg.boundnames is not None
+                and pkg.boundnames.get_data() not in (None, False)
+            )
             spd = pkg.stress_period_data.get_data()
             ncomps = len(self.components)
             updated_spd = {}
             for sp, records in spd.items():
                 updated = []
+                if records is None:
+                    updated_spd[sp] = None
+                    # for recharge some spds are none
+                    continue
                 for i, rec in enumerate(records):
                     base = tuple(rec)
+                    if has_boundnames:
+                        boundname = base[-1]
+                        base = base[:-1]
                     if n_existing_aux > 0:
                         base = base[:-n_existing_aux]
                     concs = cs.data.get(i, [0.0] * ncomps)
-                    updated.append(base + tuple(concs))
+                    row = base + tuple(concs)
+                    if has_boundnames:
+                        row = row + (boundname,)
+                    updated.append(row)
                 updated_spd[sp] = updated
             # auxiliary must be set before the data so flopy rebuilds the SPD
             # dtype with the component columns before validating the records.
             pkg.auxiliary = self.components
             pkg.stress_period_data.set_data(updated_spd)
+
+    def _set_rcha_aux(self, pkg, cs) -> None:
+        """Write equilibrated recharge chemistry as per-component array aux on RCHA.
+
+        Array recharge stores aux as full grid arrays (one per auxiliary variable),
+        not as per-cell records, so each component concentration is broadcast across
+        the recharge grid. Uniform recharge chemistry only: exactly one source solution.
+
+        Parameters
+        ----------
+        pkg : flopy.mf6.ModflowGwfrcha
+            The array-recharge package to receive component aux arrays.
+        cs : ChemStress
+            The equilibrated chem stress; ``cs.data`` must hold a single solution.
+        """
+        ncomps = len(self.components)
+        if len(cs.data) != 1:
+            raise ValueError(
+                f"Array recharge ChemStress '{cs.packnme}' supports uniform chemistry "
+                f"only (one source solution); got {len(cs.data)}. Use set_spd([solution])."
+            )
+        concs = next(iter(cs.data.values()))  # [c0, c1, ...] for the single solution
+        aux_spd = {}
+        for sp, rch_arr in pkg.recharge.get_data().items():
+            if rch_arr is None:
+                aux_spd[sp] = None  # reuse previous period
+                continue
+            aux_spd[sp] = np.stack(
+                [np.full_like(rch_arr, concs[j], dtype=float) for j in range(ncomps)]
+            )
+        # auxiliary names must be set before the arrays so flopy sizes naux correctly.
+        pkg.auxiliary = self.components
+        pkg.aux.set_data(aux_spd)
 
     def _build_reactive_gwt_models(self) -> None:
         """Clone the conservative tracer GWT into N reactive GWT models.

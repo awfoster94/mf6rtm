@@ -888,3 +888,125 @@ class TestFromMf6:
         with pytest.raises(ValueError, match="cells is not set"):
             model.write_simulation()
 
+    @staticmethod
+    def _build_minimal_sim_rcha(sim_ws):
+        """Minimal flopy sim: GWF with array recharge (RCHA) + tracer GWT.
+
+        RCHA carries a single ``tracer`` aux array; GWT SSM sources it. Mirrors
+        ``_build_minimal_sim`` but exercises the array-recharge aux path.
+        """
+        import flopy
+        sim = flopy.mf6.MFSimulation(
+            sim_name='test', sim_ws=str(sim_ws), exe_name='mf6'
+        )
+        flopy.mf6.ModflowTdis(sim, nper=1, perioddata=[(1.0, 1, 1.0)], time_units='days')
+
+        gwf = flopy.mf6.ModflowGwf(sim, modelname='gwf', save_flows=True)
+        ims_gwf = flopy.mf6.ModflowIms(sim, filename='gwf.ims')
+        sim.register_ims_package(ims_gwf, ['gwf'])
+
+        flopy.mf6.ModflowGwfdis(gwf, nlay=1, nrow=1, ncol=3,
+                                 delr=1.0, delc=1.0, top=0.0, botm=-1.0,
+                                 filename='gwf.dis')
+        flopy.mf6.ModflowGwfnpf(gwf, k=1.0, filename='gwf.npf')
+        flopy.mf6.ModflowGwfic(gwf, strt=1.0, filename='gwf.ic')
+        flopy.mf6.ModflowGwfchd(
+            gwf, stress_period_data=[[(0, 0, 2), 0.0]],
+            pname='chdout', filename='gwf.chdout.chd',
+        )
+        flopy.mf6.ModflowGwfrcha(
+            gwf, recharge=0.001, auxiliary=['tracer'], aux={0: 0.0},
+            pname='rcha', filename='gwf.rcha',
+        )
+        flopy.mf6.ModflowGwfoc(gwf, head_filerecord='gwf.hds',
+                                budget_filerecord='gwf.cbb',
+                                saverecord=[('HEAD', 'ALL'), ('BUDGET', 'ALL')])
+
+        gwt = flopy.mf6.ModflowGwt(sim, modelname='gwt')
+        ims_gwt = flopy.mf6.ModflowIms(
+            sim, linear_acceleration='BICGSTAB', filename='gwt.ims'
+        )
+        sim.register_ims_package(ims_gwt, ['gwt'])
+
+        flopy.mf6.ModflowGwtdis(gwt, nlay=1, nrow=1, ncol=3,
+                                  delr=1.0, delc=1.0, top=0.0, botm=-1.0,
+                                  filename='gwt.dis')
+        flopy.mf6.ModflowGwtic(gwt, strt=0.0, filename='gwt.ic')
+        flopy.mf6.ModflowGwtssm(
+            gwt, sources=[['rcha', 'aux', 'tracer']], filename='gwt.ssm'
+        )
+        flopy.mf6.ModflowGwtadv(gwt, scheme='UPSTREAM')
+        flopy.mf6.ModflowGwtmst(gwt, porosity=0.3, filename='gwt.mst')
+        flopy.mf6.ModflowGwtoc(gwt, budget_filerecord='gwt.cbc',
+                                 concentration_filerecord='gwt.ucn',
+                                 saverecord=[('CONCENTRATION', 'ALL')])
+        flopy.mf6.ModflowGwfgwt(sim, exgtype='GWF6-GWT6',
+                                  exgmnamea='gwf', exgmnameb='gwt',
+                                  filename='gwf-gwt.gwfgwt')
+        return sim
+
+    def test_rcha_aux_array_structure(self, tmp_path, benchmark_database):
+        """RCHA aux becomes per-component grid arrays filled with equilibrated concs."""
+        sim_ws = tmp_path / 'conservative'
+        sim_ws.mkdir()
+        sim = self._build_minimal_sim_rcha(sim_ws)
+
+        solutions = Solutions({'Ca': [1e-4, 1e-3], 'Cl': [2e-4, 2e-3]})
+        solutions.set_ic(1)
+
+        model = Mup3d.from_mf6(sim, solutions, name='test', gwt_name='gwt')
+        model.set_database(benchmark_database)
+        model.initialize()
+
+        components = model.components
+        assert len(components) > 0
+
+        rcha_cs = ChemStress('rcha', type='aux')
+        rcha_cs.set_spd([2])  # uniform: single source solution
+        model.set_chem_stress(rcha_cs)
+
+        model.write_simulation()
+
+        # Inspect the reactive GWF rcha package in the written simulation.
+        gwf = model._gwt_sim.get_model('gwf')
+        rcha = gwf.get_package('rcha')
+
+        # auxiliary names must be the components, not the original 'tracer'.
+        # After write_simulation, get_data() returns a recarray whose single row
+        # is ('auxiliary', comp0, comp1, ...); drop the leading tag field.
+        aux_row = np.atleast_1d(rcha.auxiliary.get_data()).tolist()[0]
+        aux_names = [str(c) for c in aux_row[1:]]
+        assert aux_names == list(components)
+
+        # aux is a per-component grid array (naux, nrow, ncol), uniform fill.
+        aux_arr = rcha.aux.get_data()[0]
+        assert aux_arr.shape == (len(components), 1, 3)
+        for j in range(len(components)):
+            assert np.allclose(aux_arr[j], aux_arr[j].flat[0])
+
+        # Each reactive GWT sources rcha via SSM AUX.
+        written = set(os.listdir(model.wd))
+        assert 'gwf.rcha' in written
+        for c in components:
+            assert f'{c}.ssm' in written, f'Missing SSM for {c}'
+
+    def test_rcha_multiple_solutions_raises(self, tmp_path, benchmark_database):
+        """RCHA ChemStress with >1 source solution raises (uniform chemistry only)."""
+        sim_ws = tmp_path / 'conservative'
+        sim_ws.mkdir()
+        sim = self._build_minimal_sim_rcha(sim_ws)
+
+        solutions = Solutions({'Ca': [1e-4, 1e-3], 'Cl': [2e-4, 2e-3]})
+        solutions.set_ic(1)
+
+        model = Mup3d.from_mf6(sim, solutions, name='test', gwt_name='gwt')
+        model.set_database(benchmark_database)
+        model.initialize()
+
+        rcha_cs = ChemStress('rcha', type='aux')
+        rcha_cs.set_spd([1, 2])  # more than one solution is invalid for rcha
+        model.set_chem_stress(rcha_cs)
+
+        with pytest.raises(ValueError, match="uniform chemistry"):
+            model.write_simulation()
+
