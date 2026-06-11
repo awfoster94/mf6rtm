@@ -10,7 +10,9 @@ class Mf6API(modflowapi.ModflowApi):
         self.initialize()
         # NOTE: The `flopy.mf6.MFSimulation() class has different methods & attributes
         # than the `modflowapi.extensions.ApiSimulation()` class
-        self.sim = flopy.mf6.MFSimulation.load(sim_ws=wd, verbosity_level=0)
+        self.sim = flopy.mf6.MFSimulation.load(sim_ws=wd, 
+                                               verbosity_level=0,
+                                               load_only=["dis", "disv", "tdis"])
         self.fmi = False
 
     def _prepare_mf6(self):

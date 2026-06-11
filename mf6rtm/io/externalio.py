@@ -72,8 +72,9 @@ class Regenerator:
             raise FileNotFoundError(f"Required file '{self.phinp}' not found in working directory '{self.wd}'.")
 
         for key, value in self.config.items():
-            if key not in ['reactive', 'emulator']:
-                print(key)
+            # only chemistry-phase sections (e.g. equilibrium_phases, kinetic_phases)
+            # carry external m0 files; skip config sections like reactive/emulator/output/solver
+            if key.endswith('_phases'):
                 if 'names' in self.config[key]:
                     names = self.config[key]['names']
                 else:
@@ -279,7 +280,9 @@ class Regenerator:
         file_data = {}
         # Read phase files following the same logic as validate_external_files
         for key, value in self.config.items():
-            if key not in ['reactive', 'emulator']:
+            # only chemistry-phase sections (e.g. equilibrium_phases, kinetic_phases)
+            # carry external m0 files; skip config sections like reactive/emulator/output/solver
+            if key.endswith('_phases'):
                 if 'names' not in self.config[key]:
                     print(f"Warning: Key '{key}' does not have 'names' attribute, skipping.")
                     continue
