@@ -391,6 +391,49 @@ class TestMup3dSetters:
         model.set_fixed_components(fixed)
         assert model.fixed_components == fixed
 
+    def test_set_diffusion_coeff(self, sample_solutions_data):
+        """Test setting per-component diffusion coefficients."""
+        solutions = Solutions(sample_solutions_data)
+        solutions.set_ic(1)
+        model = Mup3d(solutions=solutions, nlay=1, nrow=1, ncol=3)
+        coeffs = {'Ca': 0.792e-9, 'Cl': 2.032e-9}
+        model.set_diffusion_coeff(coeffs)
+        assert model._diffusion_coeff == coeffs
+
+    def test_set_diffusion_coeff_overwrites(self, sample_solutions_data):
+        """Calling set_diffusion_coeff again replaces the previous mapping."""
+        solutions = Solutions(sample_solutions_data)
+        solutions.set_ic(1)
+        model = Mup3d(solutions=solutions, nlay=1, nrow=1, ncol=3)
+        model.set_diffusion_coeff({'Ca': 1e-9})
+        model.set_diffusion_coeff({'Cl': 2e-9})
+        assert model._diffusion_coeff == {'Cl': 2e-9}
+
+
+class TestResolveChargeSpecies:
+    """Test suite for Mup3d._resolve_charge_species (charge-flag resolution)."""
+
+    def test_true_defaults_to_ph(self):
+        assert Mup3d._resolve_charge_species(True) == "pH"
+
+    def test_string_returned_as_is(self):
+        assert Mup3d._resolve_charge_species("Cl") == "Cl"
+
+    def test_single_element_list_unwrapped(self):
+        assert Mup3d._resolve_charge_species(["Na"]) == "Na"
+
+    def test_single_element_tuple_unwrapped(self):
+        assert Mup3d._resolve_charge_species(("Na",)) == "Na"
+
+    def test_multiple_components_raise(self):
+        """Only one component may carry the charge flag."""
+        with pytest.raises(ValueError):
+            Mup3d._resolve_charge_species(["Na", "Cl"])
+
+    def test_invalid_type_raises(self):
+        with pytest.raises(TypeError):
+            Mup3d._resolve_charge_species(123)
+
 
 class TestMup3dPhases:
     """Test suite for Mup3d phase-related methods."""

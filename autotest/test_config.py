@@ -78,3 +78,87 @@ class TestMF6RTMConfigStr:
         text = str(cfg)
         assert 'mol/L' in text
         assert '1.00e-06' in text
+
+    def test_str_lists_user_timesteps(self):
+        """__str__ enumerates each (period, step) when timing is 'user'."""
+        cfg = MF6RTMConfig(reactive={'timing': 'user', 'tsteps': [(1, 1), (2, 3)]})
+        text = str(cfg)
+        assert 'User-defined time steps' in text
+        assert 'Period 1, Step 1' in text
+        assert 'Period 2, Step 3' in text
+
+    def test_repr_contains_class_and_attrs(self):
+        """__repr__ renders the class name and the reactive attribute."""
+        cfg = MF6RTMConfig()
+        text = repr(cfg)
+        assert text.startswith('MF6RTMConfig(')
+        assert 'reactive=' in text
+
+
+class TestMF6RTMConfigValidateTsteps:
+    """Tests for _validate_tsteps branch handling."""
+
+    def test_user_timing_empty_tsteps_raises(self):
+        cfg = MF6RTMConfig(reactive={'timing': 'user', 'tsteps': []})
+        with pytest.raises(ValueError):
+            cfg._validate_tsteps()
+
+    def test_all_timing_with_tsteps_warns(self, capsys):
+        cfg = MF6RTMConfig(reactive={'timing': 'all', 'tsteps': [(1, 1)]})
+        cfg._validate_tsteps()
+        assert 'WARNING' in capsys.readouterr().out
+
+    def test_bad_tstep_shape_raises(self):
+        cfg = MF6RTMConfig(reactive={'timing': 'user', 'tsteps': [(1, 1, 1)]})
+        with pytest.raises(ValueError):
+            cfg._validate_tsteps()
+
+    def test_non_integer_tstep_raises(self):
+        cfg = MF6RTMConfig(reactive={'timing': 'user', 'tsteps': [(1.0, 2.0)]})
+        with pytest.raises(ValueError):
+            cfg._validate_tsteps()
+
+    def test_non_one_indexed_tstep_raises(self):
+        cfg = MF6RTMConfig(reactive={'timing': 'user', 'tsteps': [(0, 1)]})
+        with pytest.raises(ValueError):
+            cfg._validate_tsteps()
+
+
+class TestMF6RTMConfigOutputSection:
+    """Tests for the [output] section round-trip."""
+
+    def test_default_output_format_is_csv(self):
+        cfg = MF6RTMConfig()
+        assert cfg.output['output_format'] == 'csv'
+
+    def test_from_dict_reads_output_format(self):
+        cfg = MF6RTMConfig.from_dict({'output': {'output_format': 'hdf5'}})
+        assert cfg.output['output_format'] == 'hdf5'
+
+    def test_to_dict_includes_output(self):
+        cfg = MF6RTMConfig()
+        d = cfg.to_dict()
+        assert d['output']['output_format'] == 'csv'
+
+    def test_round_trip_via_toml(self, tmp_path):
+        cfg = MF6RTMConfig()
+        cfg.output['output_format'] = 'hdf5'
+        filepath = tmp_path / "mf6rtm.toml"
+        cfg.save_to_file(str(filepath))
+
+        reloaded = MF6RTMConfig.from_toml_file(str(filepath))
+        assert reloaded.output['output_format'] == 'hdf5'
+
+
+class TestMF6RTMConfigFromTomlErrors:
+    """Tests for from_toml_file error handling."""
+
+    def test_missing_file_raises(self):
+        with pytest.raises(FileNotFoundError):
+            MF6RTMConfig.from_toml_file('/nonexistent/path/mf6rtm.toml')
+
+    def test_invalid_toml_raises_valueerror(self, tmp_path):
+        filepath = tmp_path / "bad.toml"
+        filepath.write_text("this is = = not valid toml [[[")
+        with pytest.raises(ValueError):
+            MF6RTMConfig.from_toml_file(str(filepath))
