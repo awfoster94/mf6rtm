@@ -234,6 +234,8 @@ class Mf6RTM(object):
         self.wd = Path(wd)
         self.threshold = 1e-10
         self.fixed_components = None
+        # flat nxyz indices excluded from reactions (still transported by mf6)
+        self.no_react_idx = None
 
         # set component model dictionary & list of conservative_transport_models
         self.component_model_dict, self.conservative_transport_models = self._create_component_model_dict()
@@ -246,6 +248,9 @@ class Mf6RTM(object):
         self.config = MF6RTMConfig.from_toml_file(self.wd/"mf6rtm.toml")
         self.reactive = self.config.reactive['enabled']
         self.min_concentration = self.config.solver.get('min_concentration', None)
+        nr = self.config.solver.get('no_react_cells', None)
+        if nr is not None:
+            self.no_react_idx = np.array(nr, dtype=int)
         self.set_emulator_training()
 
         # output settings: constructor param overrides config file value
@@ -637,6 +642,8 @@ class Mf6RTM(object):
                         threshold=self.threshold,
                     )
                     self.diffmask = diffmask
+                if self.no_react_idx is not None:
+                    self.diffmask[self.no_react_idx] = 0
                 # solve reactions
                 self.phreeqcbmi._solve_phreeqcrm(dt, diffmask=self.diffmask)
                 mf6_conc_m3_array = self._transfer_array_to_mf6()

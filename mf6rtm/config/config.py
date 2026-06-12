@@ -67,6 +67,7 @@ class MF6RTMConfig:
             },
             "solver": {
                 "min_concentration": None,
+                "no_react_cells": None,
             },
         }
 
@@ -355,6 +356,7 @@ class MF6RTMConfig:
             solver_config = config_dict['solver']
             kwargs['solver'] = {
                 'min_concentration': solver_config.get('min_concentration', None),
+                'no_react_cells': solver_config.get('no_react_cells', None),
             }
 
         # Flatten everything *except* known sections
