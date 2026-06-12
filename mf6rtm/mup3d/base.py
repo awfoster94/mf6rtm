@@ -1944,7 +1944,7 @@ class Mup3d(object):
             if self.equilibrium_phases is not None:
                 phreeqcrm_yaml.YAMLAddOutputVars("EquilibriumPhases", "true")
             if self.kinetic_phases is not None:
-                phreeqcrm_yaml.YAMLAddOutputVars("KineticReactants", "true")   
+                phreeqcrm_yaml.YAMLAddOutputVars("KineticReactants", "true")
         else:
             phreeqcrm_yaml.YAMLAddOutputVars("AddOutputVars", "true")
 

@@ -618,7 +618,7 @@ class Mf6RTM(object):
             self.get_saturation_from_mf6()
             # check_reactive_kstp()
             if self.is_reactive_tstep():
-                self.phreeqcbmi.SetSaturation(self.phreeqcbmi.sat_now) 
+                self.phreeqcbmi.SetSaturation(self.phreeqcbmi.sat_now)
                 c_dbl_vect, mf6_conc_m3_array = self._transfer_array_to_phreeqcrm()
                 self.phreeqcbmi._get_kper_kstp_from_mf6api(self.mf6api)
                             # Moved from `_transfer_array_to_phreeqcrm()`
