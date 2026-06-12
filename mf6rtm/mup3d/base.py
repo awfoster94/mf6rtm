@@ -654,15 +654,53 @@ class Mup3d(object):
         self.reaction_temp = rx_temp
         return rx_temp
 
+    @staticmethod
+    def _resolve_charge_species(add_charge_flag):
+        """Resolve the ``add_charge_flag`` argument to a single species name.
+
+        The PHREEQC ``charge`` keyword balances a solution by adjusting exactly
+        one species, so the flag may target only one component.
+
+        Parameters
+        ----------
+        add_charge_flag : bool or str
+            ``True`` applies the flag to ``"pH"`` (the default/legacy behavior).
+            A string applies it to that single component instead, e.g. ``"Cl"``.
+
+        Returns
+        -------
+        str
+            The single species name that should receive the charge flag.
+        """
+        if add_charge_flag is True:
+            return "pH"
+        if isinstance(add_charge_flag, str):
+            return add_charge_flag
+        # accept a 1-element list/tuple for convenience, but never more
+        if isinstance(add_charge_flag, (list, tuple)):
+            if len(add_charge_flag) == 1 and isinstance(add_charge_flag[0], str):
+                return add_charge_flag[0]
+            raise ValueError(
+                "The charge flag can only be applied to one component; "
+                f"got {add_charge_flag!r}"
+            )
+        raise TypeError(
+            "add_charge_flag must be True (defaults to 'pH') or a single component "
+            f"name as a string; got {type(add_charge_flag).__name__}"
+        )
+
     def generate_phreeqc_script(self, add_charge_flag=False):
         """
         Generates the phinp file for the MF6RTM model.
 
         Parameters
         ----------
-        add_charge_flag : bool, optional
-            Whether to add a charge flag to species in the solution block.
-            Default is False.
+        add_charge_flag : bool or str, optional
+            Add the PHREEQC ``charge`` balancing flag to one component in every
+            SOLUTION block. ``False`` (default) disables it. ``True`` applies it
+            to ``"pH"`` (legacy behavior). Pass a single component name (e.g.
+            ``"Cl"``) to balance on that component instead. Only one component
+            may carry the flag.
         Returns
         -------
         str
@@ -759,7 +797,16 @@ class Mup3d(object):
                 script += source.read()
 
         if add_charge_flag:
-            script = utils.add_charge_flag_to_species_in_solution(script)
+            charge_species = self._resolve_charge_species(add_charge_flag)
+            if charge_species not in self.solutions.data:
+                print(
+                    f"WARNING: charge flag component '{charge_species}' not found in "
+                    f"solution species {sorted(self.solutions.data.keys())}; "
+                    "no 'charge' keyword will be added."
+                )
+            script = utils.add_charge_flag_to_species_in_solution(
+                script, species=[charge_species]
+            )
 
         with open(filename, 'w') as file:
             file.write(script)
@@ -775,8 +822,10 @@ class Mup3d(object):
         ----------
         nthreads : int, optional
             Number of threads for parallel processing. Default is 1.
-        add_charge_flag : bool, optional
-            Whether to add charge flag to species. Default is False.
+        add_charge_flag : bool or str, optional
+            Add the PHREEQC ``charge`` balancing flag to one component. ``False``
+            (default) disables it, ``True`` applies it to ``"pH"``, and a single
+            component name (e.g. ``"Cl"``) balances on that component instead.
 
         Attributes Added
         ---------------
