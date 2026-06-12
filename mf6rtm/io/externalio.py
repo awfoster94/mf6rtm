@@ -2,6 +2,7 @@
 inputs from layered txt files.
 """
 import os
+import re
 import numpy as np
 import pandas as pd
 from mf6rtm.simulation.mf6api import Mf6API
@@ -18,6 +19,37 @@ ic_position = {
     'solid_solution_phases': 5,
      'kinetic_phases':6,
 }
+
+# PHREEQC top-level keyword classification used when regenerating _phinp.dat.
+# Matched against the EXACT first token of a column-0 keyword line (not startswith),
+# so e.g. SOLUTION != SOLUTION_SPECIES and EXCHANGE != EXCHANGE_SPECIES.
+_REGENERATED_KEYWORDS = {  # dropped from source; rebuilt per-cell from the config m0 files
+    "EQUILIBRIUM_PHASES", "PURE_PHASES", "KINETICS", "EXCHANGE",
+}
+_SOLUTION_KEYWORDS = {"SOLUTION"}  # preserved verbatim
+_PRESERVED_REACTION_KEYWORDS = {  # reaction-state blocks we don't regenerate -> preserved verbatim
+    "SURFACE", "GAS_PHASE", "SOLID_SOLUTIONS", "REACTION",
+    "REACTION_TEMPERATURE", "REACTION_PRESSURE", "MIX",
+    "USE", "SAVE", "COPY", "TITLE",
+}
+_OUTPUT_KEYWORDS = {  # emitted last, verbatim, exactly once
+    "SELECTED_OUTPUT", "USER_PUNCH", "USER_GRAPH", "USER_PRINT", "PRINT", "DUMP",
+}
+# Anything else that starts a block (KNOBS, RATES, PHASES, SOLUTION_SPECIES,
+# *_MASTER_SPECIES, EXCHANGE_SPECIES, SURFACE_SPECIES, unknown uppercase keywords)
+# is treated as a DEFINITION block and emitted at the top, in original order.
+
+# A column-0 PHREEQC keyword: uppercase letters/underscores/digits, not indented.
+_KEYWORD_RE = re.compile(r"^[A-Z][A-Z_0-9]*$")
+
+
+def _ends_with_end(lines):
+    """True if the last non-blank line of ``lines`` is a PHREEQC ``END``."""
+    for line in reversed(lines):
+        if line.strip():
+            return line.strip().upper() == "END"
+    return False
+
 
 class Regenerator:
     """
@@ -37,6 +69,7 @@ class Regenerator:
         self.yamlfile = os.path.join(self.wd, yamlfile)
         self.phinp = phinp
         self.config = MF6RTMConfig.from_toml_file(os.path.join(self.wd, 'mf6rtm.toml')).to_dict()
+
         self.grid_shape = grid_dimensions(Mf6API(self.wd, os.path.join(self.wd, dllfile)))
         self.nlay = self.grid_shape[0]
         self.nxyz = total_cells_in_grid(Mf6API(self.wd, os.path.join(self.wd, dllfile)))
@@ -90,22 +123,58 @@ class Regenerator:
             script = f.readlines()
         return script
 
-    def get_solution_blocks(self, script):
+    @staticmethod
+    def _is_block_start(line):
+        """A column-0, non-blank, non-END line whose first token is a PHREEQC keyword.
+
+        PHREEQC data lines are indented or lowercase, so they never match; this lets
+        ``END`` and data attach to the current block instead of starting a new one.
         """
-        Extract solution blocks from the script.
+        if not line or line[0].isspace() or not line.strip():
+            return None
+        token = line.split()[0].upper()
+        if token == "END":
+            return None
+        if _KEYWORD_RE.match(token):
+            return token
+        return None
+
+    def _split_into_blocks(self, script):
+        """Split a phinp script (list of lines) into ordered ``(keyword, lines)`` blocks.
+
+        A block starts at a column-0 keyword line and runs until the next one; ``END``,
+        blank lines, and indented/lowercase data attach to the current block (so each
+        block carries its own trailing ``END`` when the source had one). Any leading
+        lines before the first keyword (comments, etc.) are returned under key ``None``.
         """
-        block = []
-        in_postfix = False
+        blocks = []
+        current_kw = None
+        current_lines = []
         for line in script:
-            if line.startswith('EQUILIBRIUM') or line.startswith('KINETIC') or line.startswith('EXCHANGE'):
-                in_postfix = False
-            if line.startswith('SOLUTION'):
-                in_postfix = True
-            if in_postfix:
-                block.append(line)
-        # set new attibute named self.solution_blocks
-        self.solution_blocks = block
-        return block
+            kw = self._is_block_start(line)
+            if kw is not None:
+                if current_lines:
+                    blocks.append((current_kw, current_lines))
+                current_kw = kw
+                current_lines = [line]
+            else:
+                current_lines.append(line)
+        if current_lines:
+            blocks.append((current_kw, current_lines))
+        return blocks
+
+    @staticmethod
+    def _classify_block(keyword):
+        """Map a block keyword to one of: regenerated, solution, preserved, output, definition."""
+        if keyword in _REGENERATED_KEYWORDS:
+            return "regenerated"
+        if keyword in _SOLUTION_KEYWORDS:
+            return "solution"
+        if keyword in _PRESERVED_REACTION_KEYWORDS:
+            return "preserved"
+        if keyword in _OUTPUT_KEYWORDS:
+            return "output"
+        return "definition"
 
     def update_yaml(self, filename='_mf6rtm.yaml'):
         """Update the YAML file with the regenerated script and initial conditions.
@@ -141,49 +210,70 @@ class Regenerator:
         self.yamlfile = filename
         return ic1_flatten
 
-    def get_postfix_block(self, script):
-        """
-        Extract the postfix block from the script.
-        """
-        postfix_block = []
-        in_postfix = False
-        for line in script:
-            if line.startswith('SELECTED_OUTPUT'):
-                in_postfix = True
-            if in_postfix:
-                postfix_block.append(line)
-            # if line.strip() == 'END':
-                # in_postfix = False
-        postfix_block = ['PRINT\n'] + postfix_block  # Ensure it starts with 'PRINT\n'
-        self.postfix_blocks = postfix_block
-        # + ''.join(postfix_block).strip()
-        return postfix_block
-
     def generate_new_script(self):
         """
-        Generate a new script based on the existing script and configuration.
+        Generate a new ``_phinp.dat`` script from the source phinp and the config.
+
+        The source is parsed into PHREEQC keyword blocks and bucketed by category, then
+        reassembled in an order that respects PHREEQC semantics:
+
+            DEFINITION blocks (KNOBS, RATES, PHASES, *_SPECIES, ...) at the top
+            -> SOLUTION blocks (verbatim)
+            -> preserved reaction blocks (SURFACE/GAS_PHASE/SOLID_SOLUTIONS, verbatim)
+            -> per-cell phase blocks regenerated from the config m0 files
+            -> OUTPUT blocks (SELECTED_OUTPUT/USER_PUNCH/PRINT, verbatim, exactly once)
+
+        Source EQUILIBRIUM_PHASES/KINETICS/EXCHANGE blocks are dropped because they are
+        rebuilt per cell from the config.
         """
         script = self.read_phinp()
-        solution_blocks = self.get_solution_blocks(script)
-        postfix_block = self.get_postfix_block(script)
+        blocks = self._split_into_blocks(script)
 
-        # Create a new script with the solution blocks and postfix block
+        definitions, solutions, preserved, output = [], [], [], []
+        for keyword, lines in blocks:
+            if keyword is None:
+                # leading comments / preamble before the first keyword -> keep at top
+                definitions.extend(lines)
+                continue
+            category = self._classify_block(keyword)
+            if category == "regenerated":
+                continue  # rebuilt from config below
+            elif category == "solution":
+                solutions.extend(lines)
+            elif category == "preserved":
+                preserved.extend(lines)
+            elif category == "output":
+                output.extend(lines)
+            else:  # definition
+                definitions.extend(lines)
+
+        self.solution_blocks = solutions
+        self.postfix_blocks = output
+
         new_script = []
-        new_script.extend(solution_blocks)
+        new_script.extend(definitions)
+        if definitions and not _ends_with_end(definitions):
+            # terminate the definition group so it commits before the SOLUTION blocks
+            new_script.append("END\n")
+        new_script.extend(solutions)
+        new_script.extend(preserved)
 
-        # Add equilibrium phases, kinetic phases, and exchange blocks
-        sim_blocks = [key for key in self.config.keys() if key != 'reactive']
+        # Per-cell phase blocks regenerated from the config m0 files.
         block_generators = {
             "equilibrium_phases": self.generate_equilibrium_phases_blocks,
             "kinetic_phases": self.generate_kinetic_phases_blocks,
-            "exchange_phases": self.generate_exchange_phases_blocks
+            "exchange_phases": self.generate_exchange_phases_blocks,
         }
-        for block in sim_blocks:
-            generator = block_generators.get(block)
+        for key in self.config.keys():
+            generator = block_generators.get(key)
             if generator is not None:
                 new_script.extend(generator())
-        new_script.extend(postfix_block)
-        self.regenerated_script = ''.join(new_script).strip()
+
+        new_script.extend(output)
+        # Guarantee every piece ends with a newline so adjacent blocks never merge
+        # (e.g. a source block whose last line lacks a trailing '\n' -> "...trueEND").
+        normalized = [p if p.endswith("\n") else p + "\n" for p in new_script]
+        self.regenerated_script = ''.join(normalized).strip()
         return self.regenerated_script
 
     def write_new_script(self, filename='_phinp.dat'):
