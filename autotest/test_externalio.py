@@ -262,12 +262,24 @@ END
 """
 
 
-def _make_regenerator(wd, phinp_text, config=None):
-    """Build a Regenerator that bypasses the heavy __init__ (no live model/dll)."""
+def _make_regenerator(wd, phinp_text, config=None,
+                      nlay=1, nxyz=None, grid_shape=None, file_data=None):
+    """Build a Regenerator that bypasses the heavy __init__ (no live model/dll).
+
+    Optional ``nlay``/``nxyz``/``grid_shape``/``file_data`` let tests exercise the
+    per-cell block generators and external-file readers without a real model.
+    """
     reg = Regenerator.__new__(Regenerator)
     reg.wd = wd
     reg.phinp = "phinp.dat"
     reg.config = config if config is not None else {"reactive": {}, "output": {}}
+    reg.nlay = nlay
+    if nxyz is not None:
+        reg.nxyz = nxyz
+    if grid_shape is not None:
+        reg.grid_shape = grid_shape
+    if file_data is not None:
+        reg.file_data = file_data
     with open(os.path.join(wd, "phinp.dat"), "w") as f:
         f.write(phinp_text)
     return reg
@@ -389,3 +401,159 @@ class TestRegeneratorReassembly:
         assert "-diagonal_scale true" in lines
         diag_i = lines.index("-diagonal_scale true")
         assert lines[diag_i + 1] == "END"
+
+    def test_leading_comment_kept_as_definition(self, tmp_wd):
+        """A comment before the first keyword is emitted at the top (keyword is None)."""
+        phinp = "# header comment\nSOLUTION 1\n    pH 7.0\nEND\n"
+        reg = _make_regenerator(tmp_wd, phinp)
+        script = reg.generate_new_script()
+        assert "# header comment" in script
+
+
+def _make_so_for_ml(mock_mf6rtm, components, nxyz, ctime=1.0):
+    """Configure mock_mf6rtm + build a SelectedOutput for write_ml_arrays tests."""
+    mock_mf6rtm.nxyz = nxyz
+    mock_mf6rtm.ctime = ctime
+    mock_mf6rtm.get_saturation_from_mf6.return_value = np.ones(nxyz)
+    mock_mf6rtm.phreeqcbmi.components = components
+    mock_mf6rtm.phreeqcbmi.ncomps = len(components)
+    return SelectedOutput(mock_mf6rtm)
+
+
+class TestWriteMlArrays:
+    def test_writes_header_and_rows_on_first_iter(self, mock_mf6rtm):
+        nxyz, comps = 3, ["Ca", "Cl"]
+        so = _make_so_for_ml(mock_mf6rtm, comps, nxyz)
+        conc = np.arange(len(comps) * nxyz, dtype=float)
+        so.write_ml_arrays(conc, iter=0, fname="_features.csv")
+
+        path = os.path.join(mock_mf6rtm.wd, "_features.csv")
+        assert os.path.exists(path)
+        with open(path) as f:
+            lines = f.read().splitlines()
+        assert lines[0] == "time,cell,saturation,Ca,Cl"
+        assert len(lines) == 1 + nxyz  # header + one row per cell
+
+    def test_append_on_later_iter_has_no_header(self, mock_mf6rtm):
+        nxyz, comps = 3, ["Ca", "Cl"]
+        so = _make_so_for_ml(mock_mf6rtm, comps, nxyz)
+        conc = np.arange(len(comps) * nxyz, dtype=float)
+        so.write_ml_arrays(conc, iter=0, fname="_t.csv")
+        so.write_ml_arrays(conc, iter=1, fname="_t.csv")
+
+        with open(os.path.join(mock_mf6rtm.wd, "_t.csv")) as f:
+            lines = f.read().splitlines()
+        # one header + two appended blocks of nxyz rows
+        assert lines[0] == "time,cell,saturation,Ca,Cl"
+        assert len(lines) == 1 + 2 * nxyz
+
+    def test_additional_variables_appended(self, mock_mf6rtm):
+        nxyz, comps = 3, ["Ca", "Cl"]
+        so = _make_so_for_ml(mock_mf6rtm, comps, nxyz)
+        mock_mf6rtm.phreeqcbmi.soutdf.columns = pd.Index(["time_d", "cell", "pH", "pe"])
+        mock_mf6rtm.phreeqcbmi.GetSelectedOutput.return_value = np.arange(4 * nxyz, dtype=float)
+        conc = np.arange(len(comps) * nxyz, dtype=float)
+        so.write_ml_arrays(conc, iter=0, add_var_names=["pH"], fname="_feat.csv")
+
+        with open(os.path.join(mock_mf6rtm.wd, "_feat.csv")) as f:
+            header = f.read().splitlines()[0]
+        assert header == "time,cell,saturation,Ca,Cl,pH"
+
+
+class TestSoutHeaders:
+    @patch("mf6rtm.io.externalio.grid_dimensions", return_value=(1, 1, 3))
+    def test_prepends_time_d_when_no_time_header(self, _gd, mock_mf6rtm):
+        mock_mf6rtm.phreeqcbmi.sout_headers = ["cell", "pH", "pe"]
+        so = SelectedOutput(mock_mf6rtm)
+        so._write_sout_headers()
+        with open(os.path.join(mock_mf6rtm.wd, "sout.csv")) as f:
+            header = f.read().splitlines()[0]
+        assert header.split(",")[0] == "time_d"
+        assert header == "time_d,cell,layer,row,col,pH,pe"
+
+    @patch("mf6rtm.io.externalio.grid_dimensions", return_value=(1, 1, 3))
+    def test_uses_existing_time_header(self, _gd, mock_mf6rtm):
+        mock_mf6rtm.phreeqcbmi.sout_headers = ["time", "cell", "pH"]
+        so = SelectedOutput(mock_mf6rtm)
+        so._write_sout_headers()
+        with open(os.path.join(mock_mf6rtm.wd, "sout.csv")) as f:
+            header = f.read().splitlines()[0]
+        assert header == "time,cell,layer,row,col,pH"
+
+
+class TestRegeneratorBlockGeneration:
+    def test_equilibrium_phases_blocks(self, tmp_wd):
+        config = {"equilibrium_phases": {"names": ["Calcite"], "si": {"Calcite": 0.0}}}
+        file_data = {"equilibrium_phases": {"Calcite": np.array([0.0, 0.1, 0.2])}}
+        reg = _make_regenerator(tmp_wd, "", config=config, nxyz=3, file_data=file_data)
+        blocks = reg.generate_equilibrium_phases_blocks()
+        assert len(blocks) == 3
+        assert blocks[1].startswith("EQUILIBRIUM_PHASES 2")
+        assert "Calcite" in blocks[1]
+        assert blocks[0].strip().endswith("END")
+
+    def test_kinetic_phases_blocks(self, tmp_wd):
+        config = {"kinetic_phases": {
+            "names": ["Pyrite"],
+            "parms": {"Pyrite": [1e-5, 2.0]},
+            "formula": {"Pyrite": "FeS2"},
+        }}
+        file_data = {"kinetic_phases": {"Pyrite": np.array([0.1, 0.2, 0.3])}}
+        reg = _make_regenerator(tmp_wd, "", config=config, nxyz=3, file_data=file_data)
+        blocks = reg.generate_kinetic_phases_blocks()
+        assert len(blocks) == 3
+        joined = blocks[0]
+        assert "KINETICS 1" in joined
+        assert "Pyrite" in joined
+        assert "-m0" in joined
+        assert "-parms" in joined
+        assert "-formula FeS2" in joined
+
+    def test_exchange_phases_blocks(self, tmp_wd):
+        config = {"exchange_phases": {"names": ["X"]}}
+        file_data = {"exchange_phases": {"X": np.array([1.5e-3, 1.6e-3, 1.7e-3])}}
+        reg = _make_regenerator(tmp_wd, "", config=config, nxyz=3, file_data=file_data)
+        blocks = reg.generate_exchange_phases_blocks()
+        assert len(blocks) == 3
+        assert "EXCHANGE 1" in blocks[0]
+        assert "X" in blocks[0]
+        assert "-equilibrate 1" in blocks[0]
+
+
+class TestRegeneratorFileIO:
+    def test_validate_missing_names_raises(self, tmp_wd):
+        reg = _make_regenerator(tmp_wd, "", config={"equilibrium_phases": {}}, nlay=1)
+        with pytest.raises(ValueError):
+            reg.validate_external_files()
+
+    def test_validate_missing_file_raises(self, tmp_wd):
+        config = {"equilibrium_phases": {"names": ["Calcite"]}}
+        reg = _make_regenerator(tmp_wd, "", config=config, nlay=1)
+        with pytest.raises(FileNotFoundError):
+            reg.validate_external_files()
+
+    def test_read_external_files_skips_missing_names(self, tmp_wd, capsys):
+        reg = _make_regenerator(tmp_wd, "", config={"equilibrium_phases": {}},
+                                nlay=1, grid_shape=(1, 1, 3))
+        data = reg.read_external_files()
+        assert "equilibrium_phases" not in data
+        assert "Warning" in capsys.readouterr().out
+
+    def test_read_external_files_loads_layer_file(self, tmp_wd):
+        config = {"equilibrium_phases": {"names": ["Calcite"]}}
+        np.savetxt(os.path.join(tmp_wd, "equilibrium_phases.Calcite.m0.layer1.txt"),
+                   np.array([0.0, 0.1, 0.2]))
+        reg = _make_regenerator(tmp_wd, "", config=config, nlay=1, grid_shape=(1, 1, 3))
+        data = reg.read_external_files()
+        assert data["equilibrium_phases"]["Calcite"] is not None
+        assert data["equilibrium_phases"]["Calcite"].shape == (1, 1, 3)
+
+    def test_read_external_files_handles_unreadable_file(self, tmp_wd, capsys):
+        """A file numpy cannot parse is warned about and yields a None entry."""
+        config = {"equilibrium_phases": {"names": ["Calcite"]}}
+        with open(os.path.join(tmp_wd, "equilibrium_phases.Calcite.m0.layer1.txt"), "w") as f:
+            f.write("not a number\nfoo bar baz\n")
+        reg = _make_regenerator(tmp_wd, "", config=config, nlay=1, grid_shape=(1, 1, 3))
+        data = reg.read_external_files()
+        assert data["equilibrium_phases"]["Calcite"] is None
+        assert "Warning" in capsys.readouterr().out
