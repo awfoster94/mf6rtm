@@ -6,7 +6,7 @@ import os
 import numpy as np
 
 from datetime import datetime
-from typing import Any, Union, Optional
+from typing import Any
 from pathlib import Path
 
 from PIL import Image
@@ -112,10 +112,14 @@ def prep_to_run(wd:os.PathLike, libname: Path | None = None) -> tuple[os.PathLik
     ), f"{yamlfile} not found in model directory {wd}"
     return yamlfile, dll
 
-def solve(wd:os.PathLike, reactive: Union[bool, None] = None, nthread: int = 1, libname: str = None) -> bool:
+def solve(wd:os.PathLike, reactive: bool | None = None, nthread: int = 1, libname: Path | None = None, **mf6rtm_kwargs) -> bool:
     """Wrapper to prepare and call solve functions"""
 
     mf6rtm = initialize_interfaces(wd, nthread=nthread, libname=libname)
+    for key, val in mf6rtm_kwargs.items():
+        if not hasattr(mf6rtm, key):
+            raise AttributeError(f"Mf6RTM has no attribute '{key}'")
+        setattr(mf6rtm, key, val)
     if reactive is not None and isinstance(reactive, bool) and reactive != mf6rtm.reactive:
         print(
                 f"Mode changed from "
@@ -131,7 +135,7 @@ def solve(wd:os.PathLike, reactive: Union[bool, None] = None, nthread: int = 1, 
 
 
 # TODO: we should maybe move this into the Mf6API as an alternative constructor
-def initialize_interfaces(wd:os.PathLike, nthread: int = 1, libname: str = None) -> Mf6API:
+def initialize_interfaces(wd:os.PathLike, nthread: int = 1, libname: Path | None = None) -> Mf6API:
     """Function to initialize the interfaces for modflowapi and phreeqcrm and returns the mf6rtm object"""
 
     yamlfile, dll = prep_to_run(wd, libname=libname)
@@ -187,14 +191,22 @@ class Mf6RTM(object):
             The PHREEQC BMI instance.
         charge_offset : float
             Offset for charge, initialized to 0.0.
+        min_concentration : float or None
+            Floor value for truncation applied to non-charge component
+            concentrations before passing to PhreeqcRM. Replaces negative
+            (and near-zero) values.
+            Default is None (no truncation). Set via set_min_concentration().
         wd :os.PathLike
             The working directory path.
         sout_fname : str
             Filename for the output, default is "sout.csv".
         reactive : bool
             Flag indicating if the model is reactive, default is True.
-        epsaqu : float
-            ??Epsaqueous value??, initialized to 0.0.
+        threshold : float
+            Appears to be the relative difference in component concentraitons to set
+            the "diffmask" that turns off reactions in upcomping timestep.
+            Initialized to 1e-10. NOTE that 1e-15 is the relative precision of float64.
+            Previously "epsaqu"?
         fixed_components : Any
             Fixed components, default is None.
         get_selected_output_on : bool
@@ -216,7 +228,7 @@ class Mf6RTM(object):
         self.phreeqcbmi = phreeqcbmi
         self.charge_offset = 0.0
         self.wd = Path(wd)
-        self.epsaqu = 0.0
+        self.threshold = 1e-10
         self.fixed_components = None
         self.selected_output = SelectedOutput(self)
 
@@ -230,6 +242,7 @@ class Mf6RTM(object):
 
         self.config = MF6RTMConfig.from_toml_file(self.wd/"mf6rtm.toml")
         self.reactive = self.config.reactive['enabled']
+        self.min_concentration = self.config.solver.get('min_concentration', None)
         self.set_emulator_training()
 
     def set_emulator_training(self) -> None:
@@ -329,6 +342,19 @@ class Mf6RTM(object):
         self.time_conversion = 1.0 / time_units_dict[time_units]
         self.phreeqcbmi.SetTimeConversion(self.time_conversion)
 
+    def set_min_concentration(self, min_concentration: float | None) -> None:
+        """Set the floor value for non-charge concentrations passed to PhreeqcRM.
+
+        Parameters
+        ----------
+        min_concentration : float or None
+            Any non-charge concentration below this value will be replaced with
+            this value before calling SetConcentrations. Use a small positive
+            number (e.g. 1e-30) to avoid PHREEQC divide-by-zero errors.
+            Pass None to disable filtering entirely.
+        """
+        self.min_concentration = min_concentration
+
     def _create_component_model_dict(self)-> tuple[dict[str, str], list[str]]:
         """
         Create a dictionary of PHREEQC aqueous chemical component names and
@@ -420,55 +446,48 @@ class Mf6RTM(object):
 
 
     def _get_cdlbl_vect(self) -> np.ndarray[np.float64]:
-        """Get the concentration array from phreeqc bmi reshape to (ncomps, nxyz)"""
+        """Get the 1D phreeqc concentration array with a length of ncomps*nxyz.
+        Returns: 1D c_dbl_vect of length (ncomps*nxyz).
+        """
         c_dbl_vect = self.phreeqcbmi.GetConcentrations()
+        return c_dbl_vect
 
-        conc = [
-            c_dbl_vect[i : i + self.nxyz] for i in range(0, len(c_dbl_vect), self.nxyz)
-        ]  # reshape array
-        # TODO: refactor to use np.reshape(), which is 2x faster
-        return conc
+    def _set_conc_at_current_kstep(self, mf6_conc_array: np.ndarray[tuple[int, int], np.float64]):
+        """Saves the current 2D concentration array retrieved from Modflow the mf6rtm object
+        as a 2D array of shape (ncomps, nxyz)
+        """
+        self.current_iteration_conc = mf6_conc_array
 
-    def _set_conc_at_current_kstep(self, c_dbl_vect: np.ndarray[np.float64]):
-        """Saves the current concentration array to the object"""
-        self.current_iteration_conc = np.reshape(
-            c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz)
-        )
+    def _set_conc_at_previous_kstep(self, mf6_conc_array: np.ndarray[tuple[int, int], np.float64]):
+        """Saves the previous 2D concentration array from mf6 to the mf6rtm object"""
+        self.previous_iteration_conc = mf6_conc_array
 
-    def _set_conc_at_previous_kstep(self, c_dbl_vect: np.ndarray[np.float64]):
-        """Saves the current concentration array to the object"""
-        self.previous_iteration_conc = np.reshape(
-            c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz)
-        )
-
-    def _transfer_array_to_mf6(self) -> np.ndarray[np.float64]:
-        """Transfer the concentration array to mf6"""
+    def _transfer_array_to_mf6(self) -> np.ndarray[np.float64, np.float64]:
+        """Get the 1D concentration array from phreeqc, convert units,
+        reshape to  2D (ncomps, nxyz), and trasnfer to mf6 bmi.
+        Returns: 2D array of shape (ncomps, nxyz)
+        """
         c_dbl_vect = self._get_cdlbl_vect()
+        mf6_conc_m3_array = np.reshape(
+            utils.concentration_l_to_m3(c_dbl_vect),
+            (self.phreeqcbmi.ncomps, self.nxyz)
+        )
 
-        # check if reactive cells were skipped due to small changes from transport and replace with previous conc
         if self._check_previous_conc_exists() and self._check_inactive_cells_exist(
             self.diffmask
         ):
-            c_dbl_vect = self._replace_inactive_cells(c_dbl_vect, self.diffmask)
-        else:
-            pass
+            mf6_conc_m3_array = self._replace_inactive_cells(
+                mf6_conc_m3_array, self.diffmask
+            )
 
-        conc_dict = {}
-        for i, c in enumerate(self.phreeqcbmi.components):
-            conc_dict[c] = c_dbl_vect[i]
-            # Set concentrations in mf6
-            gwt_model_name = self.component_model_dict[c]
-            if gwt_model_name.lower() == "charge":
-                self.mf6api.set_value(
-                    f"{gwt_model_name.upper()}/X",
-                    utils.concentration_l_to_m3(conc_dict[c]) + self.charge_offset,
-                )
-            else:
-                self.mf6api.set_value(
-                    f"{gwt_model_name.upper()}/X",
-                    utils.concentration_l_to_m3(conc_dict[c]),
-                )
-        return c_dbl_vect
+        for i, component in enumerate(self.phreeqcbmi.components):
+            gwt_model_name = self.component_model_dict[component].upper()
+            concs = mf6_conc_m3_array[i]
+            if component.lower() == "charge":
+                concs += self.charge_offset
+            self.mf6api.set_value(f"{gwt_model_name}/X", concs)
+
+        return mf6_conc_m3_array
 
     def _check_previous_conc_exists(self) -> bool:
         """Function to replace inactive cells in the concentration array"""
@@ -482,59 +501,43 @@ class Mf6RTM(object):
 
     def _replace_inactive_cells(
         self,
-        c_dbl_vect: np.ndarray[np.float64],
+        mf6_conc_array: np.ndarray[tuple[int, int], np.float64],
         diffmask: np.ndarray[np.float64],
-    ) -> np.ndarray[np.float64]:
-        """Function to replace inactive cells in the concentration array"""
-        c_dbl_vect = np.reshape(c_dbl_vect, (self.phreeqcbmi.ncomps, self.nxyz))
+    ) -> np.ndarray[tuple[int, int], np.float64]:
+        """Function to replace inactive cells in the 2D concentration array"""
         # get inactive cells
         inactive_idx = [
             utils.get_indices(0, diffmask) for k in range(self.phreeqcbmi.ncomps)
         ]
-        c_dbl_vect[:, inactive_idx] = self.previous_iteration_conc[:, inactive_idx]
-        c_dbl_vect = c_dbl_vect.flatten()
-        conc = [
-            c_dbl_vect[i : i + self.nxyz] for i in range(0, len(c_dbl_vect), self.nxyz)
-        ]
-        return conc
+        mf6_conc_array[:, inactive_idx] = self.previous_iteration_conc[:, inactive_idx]
+        return mf6_conc_array
 
-    def _transfer_array_to_phreeqcrm(self) -> np.ndarray[np.float64]:
-        """Transfer the concentration array to phreeqc bmi"""
-        mf6_conc_array = []
-        for c in self.phreeqcbmi.components:
-            if c.lower() == "charge":
-                mf6_conc_array.append(
-                    utils.concentration_m3_to_l(
-                        self.mf6api.get_value(
-                            self.mf6api.get_var_address(
-                                "X",
-                                f"{self.component_model_dict[c].upper()}",
-                            )
-                        )
-                        - self.charge_offset
+    def _transfer_array_to_phreeqcrm(self) -> np.ndarray[tuple[Any], np.float64]:
+        """Get the 2D concentration array (ncomps, nxyz) from mf6, convert units,
+        reshape to 1D (ncomps*nxyz), and transfer to phreeqc bmi.
+        Returns: 1D c_dbl_vect of length (ncomps*nxyz), 2D conc array from mf6
+        """
+        mf6_conc_m3_array = np.empty((self.phreeqcbmi.ncomps, self.nxyz), dtype=np.float64)
+        for i, component in enumerate(self.phreeqcbmi.components):
+            gwt_model_name = self.component_model_dict[component].upper()
+            concs = self.mf6api.get_value(f"{gwt_model_name}/X")
+            if component.lower() == "charge":
+                concs -= self.charge_offset
+            elif self.min_concentration is not None:
+                floor_m3 = utils.concentration_l_to_m3(self.min_concentration)
+                below = concs < floor_m3
+                if below.any():
+                    print(
+                        f"  [{component}] {below.sum()} cell(s) below "
+                        f"min_concentration (min={utils.concentration_m3_to_l(concs[below].min()):.2e} mol/L); "
+                        f"clipping to {self.min_concentration:.2e} mol/L"
                     )
-                )
+                np.clip(concs, floor_m3, None, out=concs)
+            mf6_conc_m3_array[i] = concs
 
-            else:
-                mf6_conc_array.append(
-                    utils.concentration_m3_to_l(
-                        self.mf6api.get_value(
-                            self.mf6api.get_var_address(
-                                "X",
-                                f"{self.component_model_dict[c].upper()}",
-                            )
-                        )
-                    )
-                )
-        c_dbl_vect = np.reshape(mf6_conc_array, self.nxyz * self.phreeqcbmi.ncomps)
+        c_dbl_vect = utils.concentration_m3_to_l(mf6_conc_m3_array.ravel())
         self.phreeqcbmi.SetConcentrations(c_dbl_vect)
-
-        # set the kper and kstp
-        self.phreeqcbmi._get_kper_kstp_from_mf6api(
-            self.mf6api
-        )  # FIXME: calling this func here is not ideal
-
-        return c_dbl_vect
+        return c_dbl_vect, mf6_conc_m3_array
 
     def _solve(self) -> bool:
         """Alias for the solve method to provide backward compatibility"""
@@ -571,6 +574,7 @@ class Mf6RTM(object):
         else:
             self.kiter = 0
         return self.kiter
+
     def solve(self) -> bool:
         """Solve the model"""
         success = False  # initialize success flag
@@ -580,6 +584,8 @@ class Mf6RTM(object):
         # check sout was created
         assert self.selected_output._check_sout_exist(), f"{self.selected_output.sout_fname} not found"
 
+        if self.min_concentration is not None:
+            print(f"Truncating concentrations at {self.min_concentration:.2e} mol/L")
         print("Starting Solution at {0}".format(sim_start.strftime(DT_FMT)))
         ctime = self._set_ctime()
         etime = self._set_etime()
@@ -595,16 +601,19 @@ class Mf6RTM(object):
             self.get_saturation_from_mf6()
             # check_reactive_kstp()
             if self.is_reactive_tstep():
-                c_dbl_vect = self._transfer_array_to_phreeqcrm()
-                self._set_conc_at_current_kstep(c_dbl_vect)
+                c_dbl_vect, mf6_conc_m3_array = self._transfer_array_to_phreeqcrm()
+                self.phreeqcbmi._get_kper_kstp_from_mf6api(self.mf6api)
+                            # Moved from `_transfer_array_to_phreeqcrm()`
+                self._set_conc_at_current_kstep(mf6_conc_m3_array)
 
                 # Export ML feature arrays if option is on
                 if self.ml_output:
-                    self.selected_output.write_ml_arrays(self.current_iteration_conc,
-                                                    self.kiter,
-                                                    add_var_names=self.selected_output.feat_var,
-                                                    fname='_features.csv'
-                                                )
+                    self.selected_output.write_ml_arrays(
+                        self.current_iteration_conc,
+                        self.kiter,
+                        add_var_names=self.selected_output.feat_var,
+                        fname='_features.csv'
+                    )
 
                 if ctime == 0.0:
                     self.diffmask = np.ones(self.nxyz)
@@ -612,19 +621,18 @@ class Mf6RTM(object):
                     diffmask = get_conc_change_mask(
                         self.current_iteration_conc,
                         self.previous_iteration_conc,
-                        self.phreeqcbmi.ncomps,
-                        self.nxyz,
-                        treshold=self.epsaqu,
+                        threshold=self.threshold,
                     )
                     self.diffmask = diffmask
                 # solve reactions
                 self.phreeqcbmi._solve_phreeqcrm(dt, diffmask=self.diffmask)
-                c_dbl_vect = self._transfer_array_to_mf6()
+                mf6_conc_m3_array = self._transfer_array_to_mf6()
 
-                self._set_conc_at_previous_kstep(c_dbl_vect)
+                self._set_conc_at_previous_kstep(mf6_conc_m3_array)
 
             self.mf6api.finalize_time_step()
             ctime = self._set_ctime()  # update the current time tracking
+            etime = self._set_etime()
             if self.selected_output.get_selected_output_on:
                 # get sout and update df
                 self.selected_output._update_selected_output()
@@ -632,11 +640,12 @@ class Mf6RTM(object):
                 self.selected_output._append_to_soutdf_file()
                 # Export ML target arrays if option is on
                 if self.ml_output:
-                    self.selected_output.write_ml_arrays(self.previous_iteration_conc,
-                                            self.kiter,
-                                            add_var_names=self.selected_output.target_var,
-                                            fname='_targets.csv'
-                                                )
+                    self.selected_output.write_ml_arrays(
+                        self.previous_iteration_conc,
+                        self.kiter,
+                        add_var_names=self.selected_output.target_var,
+                        fname='_targets.csv',
+                    )
 
         sim_end = datetime.now()
         td = (sim_end - sim_start).total_seconds() / 60.0
@@ -675,25 +684,29 @@ def get_inactive_idx(arr: np.ndarray, val: float = 1e30):
 
 
 def get_conc_change_mask(
-    ci: np.ndarray[np.float64],
-    ck: np.ndarray[np.float64],
-    ncomp: int,
-    nxyz: int,
-    treshold: float = 1e-10,
+    ck: np.ndarray[tuple[int, int], np.float64], # current_iteration_conc: 2D (ncomps, nxyz)
+    ci: np.ndarray[tuple[int, int], np.float64], # previous_iteration_conc: 2D (ncomps, nxyz)
+    threshold: float = 1e-15, # relative precision of a float64
 ) -> np.ndarray[np.float64]:
-    """Function to get the active-inactive cell mask for concentration change to inform phreeqc which cells to update"""
-    # reshape arrays to 2D (nxyz, ncomp)
-    ci = ci.reshape(nxyz, ncomp)
-    ck = ck.reshape(nxyz, ncomp) + 1e-30
-
+    """Function to get the active-inactive cell mask for concentration change due to transport
+    to inform phreeqc which cells to update.
+    Parameters:
+    ck: current_iteration_conc: 2D array (ncomps, nxyz)
+    ci: previous_iteration_conc: 2D array(ncomps, nxyz)
+    Returns:
+    diffmask: 1D array of size nxyz with zeros for inactive cells
+    """
     # get the difference between the two arrays and divide by ci
-    diff = np.abs((ci - ck.reshape(-1 * nxyz, ncomp)) / ci) < treshold
-    diff = np.where(diff, 0, 1)
-    diff = diff.sum(axis=1)
+    relative_change = np.abs(np.divide(
+        (ck - ci), ck, out=np.zeros_like(ci, dtype=float), where=ci!=0
+    )) # avoid division by zero. NOTE: change if truncating is implemented
+    diff_boolean = relative_change < threshold
+    diff_ones = np.where(diff_boolean, 0, 1)
+    diff_sum = diff_ones.sum(axis=0) # Sum over all components in grid
 
-    # where values <0 put -1 else 1
-    diff = np.where(diff == 0, 0, 1)
-    return diff
+    # If any component shows a change, set to 1 to calculate reactions
+    diffmask = np.where(diff_sum == 0, 0, 1)
+    return diffmask
 
 
 def longest_common_substring(strings):
@@ -756,7 +769,7 @@ def mrbeaker() -> str:
 
     return mrbeaker
 
-def run_cmd(cwd: Optional[os.PathLike] = None) -> None:
+def run_cmd(cwd: str | os.PathLike | None = None) -> None:
     """Console entrypoint compatibility wrapper.
 
     When used as a console script the entrypoint calls `mf6rtm:run_cmd`
@@ -767,4 +780,4 @@ def run_cmd(cwd: Optional[os.PathLike] = None) -> None:
         cwd = os.getcwd()
 
     # run the solve function
-    solve(cwd)
+    solve(Path(cwd))

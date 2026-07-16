@@ -286,7 +286,7 @@ class Mup3d(object):
     """
     def __init__(
         self,
-        name: Union[int, None] = None,
+        name: Union[str, None] = None,
         solutions: Union[Solutions, None] = None,
         nlay: Union[int, None] = None,
         nrow: Union[int, None] = None,
@@ -1394,15 +1394,22 @@ class Mup3d(object):
         self.phreeqcrm_yaml = phreeqcrm_yaml
         return
 
-    def run(self, reactive = None, nthread=1, libname=None) -> bool:
+    def run(self, reactive = None, nthread=1, libname=None, **kwargs) -> bool:
         """Wrapper function to run the MF6RTM model
 
         Parameters
         ----------
         reactive : bool, optional
             Whether to run the model in reactive mode. If None, uses the value from the config
-            nthread : int, optional
-                Number of threads to use for the simulation. Default is 1.
+        nthread : int, optional
+            Number of threads to use for the simulation. Default is 1.
+        libname : str, optional
+            Name of the MF6 shared library. If None, uses the default.
+        **kwargs
+            Additional keyword arguments set as attributes on the Mf6RTM instance
+            before solving. Valid keys are any settable attribute of Mf6RTM, e.g.:
+            ``threshold``, ``min_concentration``, ``charge_offset``,
+            ``fixed_components``.
 
         Returns
         -------
@@ -1411,7 +1418,7 @@ class Mup3d(object):
         """
         with working_dir(self.wd):
             print("Running mf6rtm", flush=True)
-            success = solve(self.wd, reactive=reactive, nthread=nthread, libname=libname)
+            success = solve(self.wd, reactive=reactive, nthread=nthread, libname=libname, **kwargs)
             return success
 
 @contextmanager
