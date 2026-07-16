@@ -28,6 +28,9 @@ jobs:
         cache: true
         environments: py${{ matrix.python-version }}
 
+    - name: Install gfortran runtime
+      run: brew install gcc
+
     - name: Install environment
       run: pixi install -e py${{ matrix.python-version }}
 
