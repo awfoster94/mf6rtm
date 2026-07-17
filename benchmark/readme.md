@@ -1,5 +1,25 @@
 # Benchmarks
 
+## Quick Start
+
+1. Install the environment (see [Install Development Environment](#install-development-environment) below).
+2. Fetch the MODFLOW 6 binaries:
+   ```shell
+   pixi run install-benchmark-bins
+   ```
+   Or manually with `get-modflow` (provided by FloPy) depending on your OS:
+   ```shell
+   # macOS
+   get-modflow benchmark/bin/mac --subset mf6,libmf6
+   # Linux
+   get-modflow benchmark/bin/linux --subset mf6,libmf6
+   # Windows
+   get-modflow benchmark/bin/win --subset mf6,libmf6
+   ```
+3. Launch Jupyter and open any `ex*.ipynb` notebook.
+
+---
+
 These Jupyter Notebooks run classic, well-know reference models using this MF6RTM package to compare model outputs with those produced by PHT3D and PHREEQC (for example 4):
 
 1. **Example 1: Engesgaard and Kipp 1992. 1D Precipitation and Dissolution Fronts.** A one-dimensional model domain in which an aqueous water composition that is in equilibrium with two minerals, calcite and dolomite, is successively replaced, i.e., flushed by water of a different chemical composition, leading to multiple precipitation-dissolution fronts. 

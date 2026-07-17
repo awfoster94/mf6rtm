@@ -1,4 +1,5 @@
 from datetime import datetime
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -20,7 +21,7 @@ class PhreeqcBMI(phreeqcrm.BMIPhreeqcRM):
 
     def _prepare_phreeqcrm_bmi(self):
         """Prepare phreeqc bmi for reaction calculations"""
-        self.SetScreenOn(True)
+        self.SetScreenOn(False)
         self.set_scalar("NthSelectedOutput", 0)
         sout_headers = self.GetSelectedOutputHeadings()
         soutdf = pd.DataFrame(columns=sout_headers)
@@ -60,7 +61,7 @@ class PhreeqcBMI(phreeqcrm.BMIPhreeqcRM):
         else:
             sat = [1] * self.GetGridCellCount()
 
-        self.SetSaturation(sat)
+        # self.SetSaturation(sat)
 
         # update which cells to run depending on conc change between tsteps
         if diffmask is not None:

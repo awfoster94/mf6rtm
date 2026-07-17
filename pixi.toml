@@ -26,6 +26,8 @@ phreeqcrm = "*"
 flopy = "*"
 modflowapi = "*"
 toml = "*"
+pytables = "*"
+sqlite = ">=3.39"
 
 # MODFLOW feature placeholder
 [feature.modflow.dependencies]
@@ -52,8 +54,20 @@ py313 = { features = ["py313", "modflow"], solve-group = "py313" }
 [tasks]
 install-package = { cmd = "pip install -e ." }
 install-modflow = { cmd = "get-modflow --repo modflow6-nightly-build :python" }
-test = { cmd = "pytest -v", depends-on = ["install-modflow", "install-package"] }
-test-cov = { cmd = "pytest -v --cov=mf6rtm --cov-report=term-missing", depends-on = ["install-modflow", "install-package"] }
+test = { cmd = "pytest -v", depends-on = ["install-modflow", "install-package", "install-benchmark-bins"] }
+test-cov = { cmd = "pytest -v --cov=mf6rtm --cov-report=term-missing", depends-on = ["install-modflow", "install-package", "install-benchmark-bins"] }
 coveralls = { cmd = "coveralls --service=github", depends-on = ["test-cov"] }
 lint = { cmd = "flake8 mf6rtm" }
 clean = { cmd = "rm -rf .pixi/tmp .pytest_cache .coverage htmlcov" }
+
+[target.linux-64.tasks]
+install-benchmark-bins = { cmd = "get-modflow benchmark/bin/linux --subset mf6,libmf6" }
+
+[target.osx-arm64.tasks]
+install-benchmark-bins = { cmd = "get-modflow benchmark/bin/mac --subset mf6,libmf6" }
+
+[target.osx-64.tasks]
+install-benchmark-bins = { cmd = "get-modflow benchmark/bin/mac --subset mf6,libmf6" }
+
+[target.win-64.tasks]
+install-benchmark-bins = { cmd = "get-modflow benchmark/bin/win --subset mf6,libmf6" }

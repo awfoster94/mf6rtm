@@ -8,9 +8,9 @@ class Mf6API(modflowapi.ModflowApi):
         # TODO: reverse the order of args to match modflowapi?
         modflowapi.ModflowApi.__init__(self, dll, working_directory=wd)
         self.initialize()
-        # NOTE: The `flopy.mf6.MFSimulation() class has different methods & attributes
-        # than the `modflowapi.extensions.ApiSimulation()` class
-        self.sim = flopy.mf6.MFSimulation.load(sim_ws=wd, verbosity_level=0)
+        self.sim = flopy.mf6.MFSimulation.load(sim_ws=wd,
+                                               verbosity_level=0,
+                                               load_only=["dis", "disv", "tdis"])
         self.fmi = False
 
     def _prepare_mf6(self):
@@ -84,9 +84,9 @@ class Mf6API(modflowapi.ModflowApi):
 
     def _check_num_fails(self):
         if self.num_fails > 0:
-            print("\nTransport failed to converge {0} times \n".format(self.num_fails))
+            print("\nMODFLOW 6 failed to converge {0} times \n".format(self.num_fails))
         else:
-            print("\nTransport converged successfully without any fails")
+            print("\nMODFLOW 6 converged successfully without any fails")
 
     @property
     def grid_type(self) -> str:

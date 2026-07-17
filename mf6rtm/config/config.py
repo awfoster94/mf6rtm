@@ -62,8 +62,12 @@ class MF6RTMConfig:
                 "feature_variables": [],
                 "target_variables": [],
             },
+            "output": {
+                "output_format": "csv",
+            },
             "solver": {
                 "min_concentration": None,
+                "no_react_cells": None,
             },
         }
 
@@ -342,14 +346,21 @@ class MF6RTMConfig:
                 'target_variables': emu_config.get('target_variables', None)
             }
 
+        if 'output' in config_dict:
+            out_config = config_dict['output']
+            kwargs['output'] = {
+                'output_format': out_config.get('output_format', 'csv'),
+            }
+
         if 'solver' in config_dict:
             solver_config = config_dict['solver']
             kwargs['solver'] = {
                 'min_concentration': solver_config.get('min_concentration', None),
+                'no_react_cells': solver_config.get('no_react_cells', None),
             }
 
         # Flatten everything *except* known sections
-        remaining_dict = {k: v for k, v in config_dict.items() if k not in ['reactive', 'solver',
+        remaining_dict = {k: v for k, v in config_dict.items() if k not in ['reactive', 'solver', 'output',
                                                                             # 'emulator'
                                                                             ]}
         flattened = flatten_dict(remaining_dict)
