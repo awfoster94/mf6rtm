@@ -1054,6 +1054,12 @@ class Mup3d(object):
             )
             spd = pkg.stress_period_data.get_data()
             ncomps = len(self.components)
+            # cs.data is either flat {cell_i: concs} (one mapping for the whole
+            # run) or per-period nested {kper: {cell_i: concs}} when set_spd was
+            # given a dict. Detect once, then look up concentrations per period.
+            per_period = bool(cs.data) and isinstance(
+                next(iter(cs.data.values())), dict
+            )
             updated_spd = {}
             for sp, records in spd.items():
                 updated = []
@@ -1061,6 +1067,9 @@ class Mup3d(object):
                     updated_spd[sp] = None
                     # for recharge some spds are none
                     continue
+                # concentrations for this stress period keyed by cell index;
+                # periods absent from a per-period dict get zero chemistry.
+                cell_concs = cs.data.get(sp, {}) if per_period else cs.data
                 for i, rec in enumerate(records):
                     base = tuple(rec)
                     if has_boundnames:
@@ -1068,7 +1077,7 @@ class Mup3d(object):
                         base = base[:-1]
                     if n_existing_aux > 0:
                         base = base[:-n_existing_aux]
-                    concs = cs.data.get(i, [0.0] * ncomps)
+                    concs = cell_concs.get(i, [0.0] * ncomps)
                     row = base + tuple(concs)
                     if has_boundnames:
                         row = row + (boundname,)
