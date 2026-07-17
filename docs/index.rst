@@ -11,8 +11,9 @@ mf6rtm Documentation
 .. toctree::
    :maxdepth: 4
    :caption: Contents:
-   
+
    introduction
+   tutorials/index
    api/modules
 
 Indices and tables

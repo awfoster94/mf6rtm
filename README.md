@@ -38,16 +38,9 @@ The package can be installed via pip:
 pip install mf6rtm
 ```
 
-### Manual Installation with Conda/Mamba
+### Installing MODFLOW 6 executables
 
-If you prefer conda/mamba, create a dedicated environment:
-
-```commandline
-mamba env create -f env.yml
-mamba activate mf6rtm-dev
-```
-
-After activating the environment, install the MODFLOW6 executables:
+After installing mf6rtm, install the MODFLOW 6 executables:
 
 ```commandline
 pip install modflow-devtools
@@ -70,9 +63,9 @@ We have provided some benchmarks in the form of Jupyter notebooks. We have also 
 
 ## Developing
 
-### With Pixi (Recommended)
+### With Pixi
 
-For development, we recommend using pixi for fast, reproducible environments:
+For development, we use pixi for fast, reproducible environments:
 
 ```commandline
 # Fork and clone the repository
@@ -93,23 +86,7 @@ pixi run lint
 
 # Test with specific Python version
 pixi run -e py311 test
-
 ```
-
-### With Conda/Mamba
-
-Alternatively, use conda/mamba with the provided environment file:
-
-```commandline
-# Install environment
-conda env create -f env.yml
-conda activate mf6rtm-dev
-
-# Install development dependencies
-pip install -r requirements_dev.txt
-```
-
-The development dependencies for testing are located in `requirements_dev.txt`. We have also provided dependencies with flopy and pyemu inside the repo but feel free to use your own distribution.
 
 ## Funding
 The developing of mf6rtm was kindly funded and supported by [Intera, Inc](https://www.intera.com).

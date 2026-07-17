@@ -45,11 +45,18 @@ python = "3.12.*"
 [feature.py313.dependencies]
 python = "3.13.*"
 
+[feature.docs.dependencies]
+sphinx = "*"
+myst-nb = "*"
+sphinx_rtd_theme = "*"
+sphinx-autodoc-typehints = "*"
+
 [environments]
 py310 = { features = ["py310", "modflow"], solve-group = "py310" }
 py311 = { features = ["py311", "modflow"], solve-group = "py311" }
 py312 = { features = ["py312", "modflow"], solve-group = "py312" }
 py313 = { features = ["py313", "modflow"], solve-group = "py313" }
+docs = { features = ["docs", "py313", "modflow"], solve-group = "py313" }
 
 [tasks]
 install-package = { cmd = "pip install -e ." }
@@ -59,6 +66,8 @@ test-cov = { cmd = "pytest -v --cov=mf6rtm --cov-report=term-missing", depends-o
 coveralls = { cmd = "coveralls --service=github", depends-on = ["test-cov"] }
 lint = { cmd = "flake8 mf6rtm" }
 clean = { cmd = "rm -rf .pixi/tmp .pytest_cache .coverage htmlcov" }
+exec-tutorials = { cmd = "jupytext --to notebook --execute docs/tutorials/*.py", depends-on = ["install-modflow", "install-package", "install-benchmark-bins"] }
+build-docs = { cmd = "sphinx-build -b html docs docs/_build/html", depends-on = ["exec-tutorials"] }
 
 [target.linux-64.tasks]
 install-benchmark-bins = { cmd = "get-modflow benchmark/bin/linux --subset mf6,libmf6" }
