@@ -1054,9 +1054,8 @@ class Mup3d(object):
             )
             spd = pkg.stress_period_data.get_data()
             ncomps = len(self.components)
-            # cs.data is either flat {cell_i: concs} (one mapping for the whole
-            # run) or per-period nested {kper: {cell_i: concs}} when set_spd was
-            # given a dict. Detect once, then look up concentrations per period.
+            # cs.data is either flat {cell_i: concs} or per-period nested {kper: {cell_i: concs}}
+            # Detect once, then look up concentrations per period.
             per_period = bool(cs.data) and isinstance(
                 next(iter(cs.data.values())), dict
             )
