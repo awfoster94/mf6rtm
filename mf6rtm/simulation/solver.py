@@ -698,7 +698,7 @@ def get_less_than_zero_idx(arr):
 
 
 def get_inactive_idx(arr: np.ndarray, val: float = 1e30):
-    """Function to get the index of all occurrences of <0 in an array"""
+    """Function to get the index of all occurrences >= val (inactive sentinel) in an array"""
     idx = list(np.where(arr >= val)[0])
     return idx
 
