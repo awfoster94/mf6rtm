@@ -7,7 +7,7 @@
 [![PyPI License](https://img.shields.io/pypi/l/mf6rtm)](https://pypi.python.org/pypi/mf6rtm)
 [![PyPI Version](https://img.shields.io/pypi/v/mf6rtm.png)](https://pypi.python.org/pypi/mf6rtm)
 [![PyPI Versions](https://img.shields.io/pypi/pyversions/mf6rtm.png)](https://pypi.python.org/pypi/mf6rtm)
-[![DOI](https://zenodo.org/badge/798559356.svg)](https://doi.org/10.5281/zenodo.18396979)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17118951.svg)](https://doi.org/10.5281/zenodo.17118951)
 
 ## Benchmarks
 Benchmark comparing model results against PHT3D are in `benchmark/`. Each folder contains a Jupyter notebook to write and execute an MF6RTM model via the MUP3D class. Additionally, PHT3D files are provided in the corresponding `pht3d` directory for each example.

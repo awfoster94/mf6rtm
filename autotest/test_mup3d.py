@@ -819,13 +819,20 @@ class TestFromMf6:
     """Structural tests for Mup3d.from_mf6 — no MF6 run required."""
 
     @staticmethod
-    def _build_minimal_sim(sim_ws):
-        """Minimal flopy sim: 3-cell GWF + tracer GWT with CHD aux + SSM."""
+    def _build_minimal_sim(sim_ws, nper=1):
+        """Minimal flopy sim: 3-cell GWF + tracer GWT with CHD aux + SSM.
+
+        ``nper`` stress periods are created; the inflow CHD (``chdin``) carries a
+        ``tracer`` aux and is given SPD rows for every period so per-period aux
+        expansion has something to attach to.
+        """
         import flopy
         sim = flopy.mf6.MFSimulation(
             sim_name='test', sim_ws=str(sim_ws), exe_name='mf6'
         )
-        flopy.mf6.ModflowTdis(sim, nper=1, perioddata=[(1.0, 1, 1.0)], time_units='days')
+        flopy.mf6.ModflowTdis(sim, nper=nper,
+                              perioddata=[(1.0, 1, 1.0)] * nper,
+                              time_units='days')
 
         gwf = flopy.mf6.ModflowGwf(sim, modelname='gwf', save_flows=True)
         ims_gwf = flopy.mf6.ModflowIms(sim, filename='gwf.ims')
@@ -836,8 +843,9 @@ class TestFromMf6:
                                  filename='gwf.dis')
         flopy.mf6.ModflowGwfnpf(gwf, k=1.0, filename='gwf.npf')
         flopy.mf6.ModflowGwfic(gwf, strt=1.0, filename='gwf.ic')
+        chdin_spd = {k: [[(0, 0, 0), 1.0, 1.0]] for k in range(nper)}
         flopy.mf6.ModflowGwfchd(
-            gwf, stress_period_data=[[(0, 0, 0), 1.0, 1.0]],
+            gwf, stress_period_data=chdin_spd,
             auxiliary=['tracer'], pname='chdin', filename='gwf.chdin.chd',
         )
         flopy.mf6.ModflowGwfchd(
@@ -909,6 +917,58 @@ class TestFromMf6:
             assert f'{c}.ims' in written, f'Missing IMS for {c}'
             assert f'{c}.cncout.cnc' in written, f'Missing CNC file for {c}'
             assert f'{c}.gwfgwt' in written, f'Missing exchange for {c}'
+
+    def test_aux_per_period_switches_solution(self, tmp_path, benchmark_database):
+        """type='aux' with a per-period dict writes distinct aux columns per period.
+
+        Regression for from_mf6 aux ChemStress: set_spd({0:[2], 1:[3]}) must expand
+        the tracer aux into one column per component *per stress period* (period 0 =
+        solution 2, period 1 = solution 3). Previously the aux path indexed cs.data by
+        cell only, so a per-period dict produced wrong-width rows (MFDataException) and
+        never switched solution.
+        """
+        sim_ws = tmp_path / 'perperiod'
+        sim_ws.mkdir()
+        sim = self._build_minimal_sim(sim_ws, nper=2)
+
+        # three solutions (1,2,3) so per-period numbers 2 and 3 are valid
+        solutions = Solutions({'Ca': [1e-4, 1e-3, 5e-3], 'Cl': [2e-4, 2e-3, 5e-3]})
+        solutions.set_ic(1)
+
+        model = Mup3d.from_mf6(sim, solutions, name='test', gwt_name='gwt')
+        model.set_database(benchmark_database)
+        model.initialize()
+        ncomps = len(model.components)
+
+        chdin_cs = ChemStress('chdin', type='aux')
+        chdin_cs.set_spd({0: [2], 1: [3]})
+        model.set_chem_stress(chdin_cs)
+
+        # must not raise MFDataException about the wrong number of columns
+        model.write_simulation()
+
+        gwf_name = next(
+            n for n in model._gwt_sim.model_names
+            if model._gwt_sim.get_model(n).model_type == 'gwf6'
+        )
+        pkg = model._gwt_sim.get_model(gwf_name).get_package('chdin')
+        spd = pkg.stress_period_data.get_data()
+
+        # chdin record is (cellid, head, *concs) -> width = 2 base fields + ncomps,
+        # and the trailing ncomps fields are the component aux columns.
+        rec0 = tuple(spd[0][0])
+        rec1 = tuple(spd[1][0])
+        assert len(rec0) == 2 + ncomps
+        assert len(rec1) == 2 + ncomps
+        aux0 = rec0[-ncomps:]
+        aux1 = rec1[-ncomps:]
+
+        # each period carries its mapped solution's equilibrated concentrations
+        np.testing.assert_allclose(aux0, tuple(model.chdin.data[0][0]))
+        np.testing.assert_allclose(aux1, tuple(model.chdin.data[1][0]))
+
+        # the solution actually switched between the two periods
+        assert aux0 != aux1
 
     def test_cnc_missing_cells_raises(self, tmp_path, benchmark_database):
         """cnc ChemStress without set_cells raises ValueError at write_simulation."""
