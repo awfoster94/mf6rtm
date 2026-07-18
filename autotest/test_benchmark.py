@@ -267,7 +267,92 @@ def build_mf6_1d_injection_model(mup3d, nper, tdis_rc, length_units, time_units,
 
     sim.write_simulation()
     # utils.prep_bins(sim_ws, src_path=src_path, get_only=['mf6', 'libmf6'], add_platform=False)
-    
+
+    return sim
+
+def build_mf6_1d_transport_first_model(sim_ws, name, nper, tdis_rc, length_units, time_units,
+                                       nlay, nrow, ncol, delr, delc, top, botm, wel_spd, chdspd,
+                                       prsity, k11, k33, dispersivity, icelltype, strt,
+                                       hclose, rclose, relax, nouter, ninner):
+    """Build a transport-first sim for Mup3d.from_mf6: GWF + one tracer GWT.
+
+    Same physics as ``build_mf6_1d_injection_model`` but the WEL carries a single
+    ``tracer`` auxiliary and there is exactly one conservative tracer GWT (SSM
+    sourcing that aux). ``from_mf6`` clones this GWT into one reactive GWT per
+    PHREEQC component at ``write_simulation()``.
+    """
+    gwfname = 'gwf'
+    sim = flopy.mf6.MFSimulation(sim_name=name, sim_ws=sim_ws, exe_name='mf6')
+    flopy.mf6.ModflowTdis(sim, nper=nper, perioddata=tdis_rc, time_units=time_units)
+
+    gwf = flopy.mf6.ModflowGwf(sim, modelname=gwfname, save_flows=True,
+                               model_nam_file=f"{gwfname}.nam")
+    imsgwf = flopy.mf6.ModflowIms(
+        sim, complexity="complex", print_option="SUMMARY", outer_dvclose=hclose,
+        outer_maximum=nouter, under_relaxation="NONE", inner_maximum=ninner,
+        inner_dvclose=hclose, rcloserecord=rclose, linear_acceleration="CG",
+        scaling_method="NONE", reordering_method="NONE", relaxation_factor=relax,
+        filename=f"{gwfname}.ims",
+    )
+    sim.register_ims_package(imsgwf, [gwf.name])
+
+    flopy.mf6.ModflowGwfdis(
+        gwf, length_units=length_units, nlay=nlay, nrow=nrow, ncol=ncol, delr=delr,
+        delc=delc, top=top, botm=botm, idomain=np.ones((nlay, nrow, ncol), dtype=int),
+        filename=f"{gwfname}.dis",
+    )
+    flopy.mf6.ModflowGwfnpf(
+        gwf, save_flows=True, save_saturation=True, icelltype=icelltype, k=k11, k33=k33,
+        save_specific_discharge=True, filename=f"{gwfname}.npf",
+    )
+    flopy.mf6.ModflowGwfic(gwf, strt=strt, filename=f"{gwfname}.ic")
+    # single 'tracer' aux; from_mf6 strips it and writes one aux per component
+    flopy.mf6.ModflowGwfwel(
+        gwf, stress_period_data=wel_spd, save_flows=True, auxiliary=['tracer'],
+        pname='wel', filename=f"{gwfname}.wel",
+    )
+    flopy.mf6.ModflowGwfchd(
+        gwf, maxbound=len(chdspd), stress_period_data=chdspd, save_flows=False,
+        pname="CHD", filename=f"{gwfname}.chd",
+    )
+    flopy.mf6.ModflowGwfoc(
+        gwf, head_filerecord=f"{gwfname}.hds", budget_filerecord=f"{gwfname}.cbb",
+        saverecord=[("HEAD", "ALL"), ("BUDGET", "ALL")],
+    )
+
+    # one conservative tracer GWT used as the from_mf6 template
+    gwtname = 'tracer'
+    gwt = flopy.mf6.MFModel(sim, model_type="gwt6", modelname=gwtname,
+                            model_nam_file=f"{gwtname}.nam")
+    imsgwt = flopy.mf6.ModflowIms(
+        sim, print_option="SUMMARY", outer_dvclose=hclose, outer_maximum=nouter,
+        under_relaxation="NONE", inner_maximum=ninner, inner_dvclose=hclose,
+        rcloserecord=rclose, linear_acceleration="BICGSTAB", scaling_method="NONE",
+        reordering_method="NONE", relaxation_factor=relax, filename=f"{gwtname}.ims",
+    )
+    sim.register_ims_package(imsgwt, [gwt.name])
+    flopy.mf6.ModflowGwtdis(
+        gwt, length_units=length_units, nlay=nlay, nrow=nrow, ncol=ncol, delr=delr,
+        delc=delc, top=top, botm=botm, idomain=np.ones((nlay, nrow, ncol), dtype=int),
+        filename=f"{gwtname}.dis",
+    )
+    flopy.mf6.ModflowGwtic(gwt, strt=0.0, filename=f"{gwtname}.ic")
+    flopy.mf6.ModflowGwtssm(gwt, sources=['wel', 'aux', 'tracer'], save_flows=True,
+                            filename=f"{gwtname}.ssm")
+    flopy.mf6.ModflowGwtadv(gwt, scheme="tvd")
+    alpha_l = np.ones((nlay, nrow, ncol)) * dispersivity
+    ath1 = np.ones((nlay, nrow, ncol)) * dispersivity * 0.1
+    atv = np.ones((nlay, nrow, ncol)) * dispersivity * 0.1
+    flopy.mf6.ModflowGwtdsp(gwt, xt3d_off=True, alh=alpha_l, ath1=ath1, atv=atv,
+                            filename=f"{gwtname}.dsp")
+    flopy.mf6.ModflowGwtmst(gwt, porosity=prsity, first_order_decay=None,
+                            filename=f"{gwtname}.mst")
+    flopy.mf6.ModflowGwtoc(
+        gwt, budget_filerecord=f"{gwtname}.cbb", concentration_filerecord=f"{gwtname}.ucn",
+        saverecord=[("CONCENTRATION", "ALL"), ("BUDGET", "ALL")],
+    )
+    flopy.mf6.ModflowGwfgwt(sim, exgtype="GWF6-GWT6", exgmnamea=gwfname,
+                            exgmnameb=gwtname, filename=f"{gwtname}.gwfgwt")
     return sim
 
 def build_mf6_2d_model(mup3d, nper, tdis_rc, length_units, time_units, nlay, nrow, ncol, delr, delc,
@@ -1083,6 +1168,122 @@ def test05(request, prefix = 'test05'):
                                         strt, rclose, relax, nouter, ninner)
     
     run_test(prefix, model, request=request, test_cli=True, libname=lib_name, treshold = 0.02)
+
+def test05_from_mf6(request, prefix = 'test05'):
+    '''Test 5 via the transport-first from_mf6 workflow.
+
+    Same pyrite 1D oxidation column as test05 (equilibrium phases, SCM, kinetics,
+    exchange), but built by wrapping an existing flopy sim (GWF + one conservative
+    tracer GWT) with Mup3d.from_mf6 and switching the injected solution per stress
+    period through ChemStress('wel', type='aux').set_spd({0:[2], 1:[3]}). The output
+    must match the same benchmark as test05 (benchmark/test05_benchmark.csv).
+    '''
+    # General
+    length_units = "meters"
+    time_units = "days"
+
+    # Model discretization (identical to test05)
+    nlay = 1
+    Lx = 0.053
+    ncol = 16
+    nrow = 1
+    delr = Lx/ncol
+    delc = 1
+    top = 2.87433E-03
+    zbotm = 0.
+    botm = np.linspace(top, zbotm, nlay + 1)[1:]
+
+    # tdis
+    nper = 2
+    nstp = [64, 100]
+    perlen = [0.9333, 1.45833]
+    tsmult = [1.0, 1.0]
+    tdis_rc = [(kper, kstep, ts) for kper, kstep, ts in zip(perlen, nstp, tsmult)]
+
+    # injection — WEL carries one 'tracer' aux (placeholder value); from_mf6
+    # replaces it with one aux column per component using the ChemStress mapping.
+    q = 2.4e-4
+    wel_spd = {i: [[(0, 0, 0), q, 1.0]] for i in range(0, len(perlen))}
+
+    # hydraulic properties
+    prsity = 0.376
+    k11 = 1.0
+    k33 = k11
+    r_hd = 1
+    strt = np.ones((nlay, nrow, ncol), dtype=float)
+    chdspd = [[(i, 0, ncol-1), r_hd] for i in range(nlay)]
+
+    # transport
+    dispersivity = 0.00537
+    icelltype = 1
+    nouter, ninner = 300, 600
+    hclose, rclose, relax = 1e-6, 1e-6, 1.0
+
+    # chemistry (identical to test05)
+    solutionsdf = pd.read_csv(os.path.join(dataws, f"{prefix}_solutions.csv"), comment='#', index_col=0)
+    solutions = utils.solution_df_to_dict(solutionsdf)
+    sol_ic = np.ones((nlay, nrow, ncol), dtype=float)
+    solution = mup3d.Solutions(solutions)
+    solution.set_ic(sol_ic)
+
+    excdf = pd.read_csv(os.path.join(dataws, f"{prefix}_exchange.csv"), comment='#', index_col=0)
+    excdf.columns = [0, 1, 2, 3]
+    exchanger_dict = excdf.to_dict()
+    for k, subdict in exchanger_dict.items():
+        for key in subdict:
+            subdict[key] = {'m0': subdict[key]}
+    exchanger = mup3d.ExchangePhases(exchanger_dict)
+    exchanger_ic = np.ones((nlay, nrow, ncol), dtype=float)
+    exchanger_ic[0, 0, :4] = 1
+    exchanger_ic[0, 0, 4:8] = 2
+    exchanger_ic[0, 0, 8:12] = 3
+    exchanger_ic[0, 0, 12:] = 4
+    exchanger.set_ic(exchanger_ic)
+    exchanger.set_equilibrate_solutions([1, 1, 1, 1])
+
+    df = pd.read_csv(os.path.join(dataws, f"{prefix}_kinetic_phases.csv"))
+    kin_phases = utils.parse_kinetics_dataframe(df)
+    kin_phases[1]['Orgc_sed']['formula'] = 'Orgc_sed -1.0 C 1.0'
+    kinetics = mup3d.KineticPhases(kin_phases)
+    kinetics.set_ic(1)
+
+    df = pd.read_csv(os.path.join(dataws, f"{prefix}_equilibrium_phases.csv"))
+    equ_phases = utils.parse_equilibriums_dataframe(df)
+    equilibriums = mup3d.EquilibriumPhases(equ_phases)
+    equilibriums.set_ic(1)
+
+    surfdic = utils.surfaces_csv_to_dict(os.path.join(dataws, f"{prefix}_surfaces.csv"))
+    surfaces = mup3d.Surfaces(surfdic)
+    surfaces.set_ic(1)
+
+    # transport-first flopy sim: GWF + single conservative tracer GWT
+    src_ws = os.path.join(cwd, f'{prefix}_from_mf6_src')
+    sim = build_mf6_1d_transport_first_model(
+        src_ws, prefix, nper, tdis_rc, length_units, time_units, nlay, nrow, ncol,
+        delr, delc, top, botm, wel_spd, chdspd, prsity, k11, k33, dispersivity,
+        icelltype, strt, hclose, rclose, relax, nouter, ninner,
+    )
+
+    # build the reactive model by cloning the tracer GWT per component
+    model = mup3d.Mup3d.from_mf6(sim, solution, name=prefix, gwt_name='tracer')
+    model.set_wd(os.path.join(cwd, f'{prefix}_from_mf6'))
+    model.set_database(os.path.join(databasews, 'ex5.dat'))
+    model.set_initial_temp([7., 7., 7.])
+    model.set_postfix(os.path.join(dataws, f'{prefix}_postfix.phqr'))
+    model.set_exchange_phases(exchanger)
+    model.set_phases(kinetics)
+    model.set_phases(equilibriums)
+    model.set_phases(surfaces)
+    model.initialize()
+
+    wellchem = mup3d.ChemStress('wel', type='aux')
+    wellchem.set_spd({0: [2], 1: [3]})  # period 0 -> solution 2, period 1 -> solution 3
+    model.set_chem_stress(wellchem)
+
+    model.write_simulation()
+
+    # compare against the SAME benchmark as test05
+    run_test(prefix, model, request=request, test_cli=True, libname=lib_name, treshold=0.02)
 
 def test_mf6_bin():
     '''Test that mf6 binary is available'''
