@@ -75,6 +75,7 @@ instance/
 
 # Sphinx documentation
 docs/_build/
+docs/tutorials/*.ipynb
 docs/tutorials/_*_run/
 
 # PyBuilder
