@@ -12,7 +12,7 @@
 # ---
 
 # %% [markdown]
-# # Pyrite oxidation column (classic workflow)
+# # 1D Pyrite Oxidation with BYO(Build your own model files)
 #
 # This tutorial reproduces the marine-sediment oxidation experiment of
 # Appelo et al. (1998): a column of pyrite-bearing sediment is first flushed
@@ -21,7 +21,7 @@
 # dissolution, cation/proton exchange, organic-matter oxidation, surface
 # complexation).
 #
-# It uses the **classic workflow**: build the :class:`~mf6rtm.mup3d.base.Mup3d`
+# It uses the **classic workflow (BYO)**: build the :class:`~mf6rtm.mup3d.base.Mup3d`
 # model first, then construct the MODFLOW 6 flow + per-component transport models
 # yourself. The classic workflow injects the inflow chemistry directly into the
 # well as per-period auxiliary concentrations, so the injected water can change

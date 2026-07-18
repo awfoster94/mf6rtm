@@ -12,7 +12,7 @@
 # ---
 
 # %% [markdown]
-# # Quickstart: 1D dissolution fronts with `from_mf6`
+# # Quickstart: 1D Dissolution Front
 #
 # This quickstart reproduces the classic Engesgaard & Kipp (1992) benchmark: a
 # one-dimensional column initially filled with water in equilibrium with
