@@ -1218,8 +1218,9 @@ class Mup3d(object):
             )
             self._gwt_sim.register_ims_package(ims, [component])
 
-            # DIS — copy from GWF (shared grid)
-            if gwf.get_package('dis') is not None:
+            # DIS/DISV — copy from GWF (shared grid). Detect the grid type with
+            distype = gwf.get_grid_type().name
+            if distype == 'DIS':
                 d = gwf.dis
                 flopy.mf6.ModflowGwtdis(
                     gwt,
@@ -1233,7 +1234,7 @@ class Mup3d(object):
                     idomain=d.idomain.get_data() if d.idomain is not None else None,
                     filename=f"{component}.dis",
                 )
-            elif gwf.get_package('disv') is not None:
+            elif distype == 'DISV':
                 d = gwf.disv
                 flopy.mf6.ModflowGwtdisv(
                     gwt,
