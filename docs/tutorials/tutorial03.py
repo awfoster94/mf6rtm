@@ -175,7 +175,7 @@ surfaces.set_ic(1)
 # %%
 model = mup3d.Mup3d.from_mf6(sim, solution, name="pyrite_from_mf6", gwt_name="tracer")
 model.set_wd(sim_ws)
-model.set_database(os.path.join(DATA, "tut02.dat"))
+model.set_database(os.path.join(DATA, "tut02_datab.dat"))
 model.set_initial_temp([7.0, 7.0, 7.0])
 model.set_postfix(os.path.join(DATA, "tut02_postfix.phqr"))
 

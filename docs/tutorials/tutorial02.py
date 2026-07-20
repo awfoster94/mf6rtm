@@ -160,7 +160,7 @@ surfaces.set_ic(1)
 sim_ws = os.path.join(BASE, "_tutorial02_run")
 model = mup3d.Mup3d("pyrite_oxidation", solution, nlay, nrow, ncol)
 model.set_wd(sim_ws)
-model.set_database(os.path.join(DATA, "tut02.dat"))
+model.set_database(os.path.join(DATA, "tut02_datab.dat"))
 model.set_initial_temp([7.0, 7.0, 7.0])
 model.set_postfix(os.path.join(DATA, "tut02_postfix.phqr"))
 
