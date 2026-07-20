@@ -1,5 +1,5 @@
-mf6rtm
-======
+API Reference
+=============
 
 .. toctree::
    :maxdepth: 4

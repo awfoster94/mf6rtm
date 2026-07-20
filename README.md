@@ -1,4 +1,9 @@
-# MF6RTM: Reactive Transport Model via the MODFLOW 6 and PHREEQCRM APIs
+<p align="center">
+  <img src="mf6rtm/assets/mf6rtm.png" alt="mf6rtm" width="420"/>
+</p>
+
+<h1 align="center">MF6RTM: Reactive Transport Model via the MODFLOW 6 and PHREEQCRM APIs</h1>
+
 ![Tests](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml/badge.svg)
 ![Tests](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi-macos.yml/badge.svg)
 ![Tests](https://github.com/p-ortega/mf6rtm/actions/workflows/docs.yml/badge.svg)
