@@ -53,7 +53,7 @@ if on_rtd:
 
 html_theme = "furo"
 html_static_path = ["_static"]
-html_logo = "_static/mf6rtm.png"
+html_logo = "../mf6rtm/assets/mf6rtm.png"
 html_title = "mf6rtm"
 
 html_theme_options = {

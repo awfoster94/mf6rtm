@@ -48,7 +48,7 @@ python = "3.13.*"
 [feature.docs.dependencies]
 sphinx = "*"
 myst-nb = "*"
-sphinx_rtd_theme = "*"
+furo = "*"
 sphinx-autodoc-typehints = "*"
 pyshp = "*"
 
