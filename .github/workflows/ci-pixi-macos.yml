@@ -1,4 +1,4 @@
-name: mf6rtm CI - macOS
+name: CI - macOS
 
 on:
   schedule:

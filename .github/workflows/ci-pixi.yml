@@ -1,4 +1,4 @@
-name: mf6rtm CI
+name: CI - win/linux
 
 on:
   schedule:
