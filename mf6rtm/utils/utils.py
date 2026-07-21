@@ -1,3 +1,8 @@
+"""Utility helpers for mf6rtm.
+
+Unit conversions, PHREEQC input/script parsing and assembly, dataframe-to-dict
+helpers, and file/executable staging used across the package.
+"""
 import platform
 import os
 import shutil
@@ -10,31 +15,104 @@ endmainblock = """\nPRINT
 END\n"""
 
 def flatten_list(xss):
-    """Flatten a list of lists"""
+    """Flatten a list of lists into a single list.
+
+    Parameters
+    ----------
+    xss : list of list
+        The nested list to flatten.
+
+    Returns
+    -------
+    list
+        A single list with all inner elements in order.
+    """
     return [x for xs in xss for x in xs]
 
 def concentration_l_to_m3(x):
-    """Convert M/L to M/m3"""
+    """Convert a concentration from mol/L to mol/m3.
+
+    Parameters
+    ----------
+    x : float or array-like
+        Concentration in mol/L.
+
+    Returns
+    -------
+    float or array-like
+        Concentration in mol/m3 (``x * 1e3``).
+    """
     c = x * 1e3
     return c
 
 def concentration_m3_to_l(x):
-    """Convert M/L to M/m3"""
+    """Convert a concentration from mol/m3 to mol/L.
+
+    Parameters
+    ----------
+    x : float or array-like
+        Concentration in mol/m3.
+
+    Returns
+    -------
+    float or array-like
+        Concentration in mol/L (``x * 1e-3``).
+    """
     c = x * 1e-3
     return c
 
 def concentration_to_massrate(q, conc):
-    """Calculate mass rate from rate (L3/T) and concentration (M/L3)"""
+    """Calculate mass rate from volumetric flow rate and concentration.
+
+    Parameters
+    ----------
+    q : float or array-like
+        Volumetric flow rate (L3/T).
+    conc : float or array-like
+        Concentration (M/L3).
+
+    Returns
+    -------
+    float or array-like
+        Mass rate (M/T), computed as ``q * conc``.
+    """
     mrate = q * conc  # M/T
     return mrate
 
 def concentration_volbulk_to_volwater(conc_volbulk, porosity):
-    """Calculate concentrations as volume of pore water from bulk volume and porosity"""
+    """Convert a bulk-volume concentration to a pore-water concentration.
+
+    Parameters
+    ----------
+    conc_volbulk : float or array-like
+        Concentration per unit bulk volume.
+    porosity : float or array-like
+        Porosity used to rescale to pore-water volume.
+
+    Returns
+    -------
+    float or array-like
+        Concentration per unit pore-water volume (``conc_volbulk / porosity``).
+    """
     conc_volwater = conc_volbulk * (1 / porosity)
     return conc_volwater
 
 def add_charge_flag_to_species_in_solution(script: str, species: list[str] = ["pH"]) -> str:
-    """Add 'charge' to species lines inside SOLUTION blocks in a PHREEQC input string."""
+    """Add the ``charge`` flag to species lines inside SOLUTION blocks.
+
+    Parameters
+    ----------
+    script : str
+        PHREEQC input script text.
+    species : list of str, optional
+        Species whose lines inside ``SOLUTION`` blocks receive the ``charge``
+        flag. Default is ``["pH"]``.
+
+    Returns
+    -------
+    str
+        The modified script with ``charge`` appended to matching lines.
+    """
     lines = script.splitlines()
     modified_lines = []
 
@@ -678,6 +756,18 @@ def generate_solution_block(species_dict, i, temp=25.0, water=1.0):
 
 
 def rearrange_copy_blocks(script):
+    """Move all ``COPY`` lines to the end of a PHREEQC script.
+
+    Parameters
+    ----------
+    script : str
+        PHREEQC input script.
+
+    Returns
+    -------
+    str
+        The script with every ``COPY`` line moved after all other lines.
+    """
     # Split the script into lines
     lines = script.split("\n")
     copy_blocks = []
@@ -702,7 +792,26 @@ def rearrange_copy_blocks(script):
     return rearranged_script
 
 def prep_bins(dest_path, src_path=os.path.join("bin"), get_only=[], add_platform=True):
-    """Copy executables from the source path to the destination path"""
+    """Copy executables from the source path to the destination path.
+
+    Parameters
+    ----------
+    dest_path : str
+        Destination directory for the copied files.
+    src_path : str, optional
+        Source directory containing the binaries. Default is ``"bin"``.
+    get_only : list of str, optional
+        If non-empty, only copy files whose base name (before the first ``.``)
+        is in this list. Default is an empty list (copy all).
+    add_platform : bool, optional
+        If True, append the platform subdirectory (``linux``/``mac``/``win``)
+        to ``src_path``. Default is True.
+
+    Returns
+    -------
+    list of str
+        Sorted names of the files that were copied.
+    """
 
     if add_platform:
         if "linux" in platform.platform().lower():
@@ -730,6 +839,20 @@ def prep_bins(dest_path, src_path=os.path.join("bin"), get_only=[], add_platform
     return sorted(files)
 
 def get_indices(element, lst):
+    """Return the indices of all occurrences of a value in a list.
+
+    Parameters
+    ----------
+    element : Any
+        Value to search for.
+    lst : list
+        List to search.
+
+    Returns
+    -------
+    list of int
+        Indices at which ``element`` occurs in ``lst``.
+    """
     return [i for i, x in enumerate(lst) if x == element]
 
 def fill_missing_minerals(data_dict):

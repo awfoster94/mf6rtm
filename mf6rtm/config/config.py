@@ -1,3 +1,8 @@
+"""Configuration schema and (de)serialization for mf6rtm runs.
+
+Defines :class:`MF6RTMConfig`, the container for reactive-transport run
+settings, with helpers to load from and save to TOML and dictionary form.
+"""
 import toml
 import os
 import numpy as np
@@ -100,7 +105,13 @@ class MF6RTMConfig:
         #         setattr(self, key, default_value)
 
     def add_new_configuration(self, **kwargs):
-        """Add new configuration parameters dynamically."""
+        """Add new configuration parameters dynamically.
+
+        Parameters
+        ----------
+        **kwargs
+            Configuration parameters to set as attributes on the instance.
+        """
         for key, value in kwargs.items():
             setattr(self, key, value)
         # Update internal schema if needed
@@ -194,7 +205,14 @@ class MF6RTMConfig:
             return False
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert configuration to dictionary for TOML output with nested structure."""
+        """Convert the configuration to a nested dictionary for TOML output.
+
+        Returns
+        -------
+        dict
+            Nested mapping with category groups (``reactive``, ``emulator``),
+            phase sections, and remaining keys, ordered for TOML serialization.
+        """
 
         result = {}
         category_prefixes = ['reactive_', 'emulator_']  # generalized prefixes
@@ -317,8 +335,21 @@ class MF6RTMConfig:
                     }
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> 'MF6RTMConfig':
+        """Build a configuration from a nested dictionary.
+
+        Parameters
+        ----------
+        config_dict : dict
+            Nested configuration mapping. The ``reactive`` and ``emulator``
+            sections are handled explicitly; remaining sections are flattened.
+
+        Returns
+        -------
+        MF6RTMConfig
+        """
         kwargs = {}
         def flatten_dict(d: Dict[str, Any], parent_key: str = '', sep: str = '_') -> Dict[str, Any]:
+            """Flatten a nested dict into ``sep``-joined single-level keys."""
             items = []
             for k, v in d.items():
                 new_key = f"{parent_key}{sep}{k}" if parent_key else k

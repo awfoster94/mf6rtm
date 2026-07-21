@@ -13,7 +13,7 @@ from . import mup3d
 from . import simulation
 from .utils import utils
 
-from .simulation.solver import run_cmd, solve
+from .simulation.solver import run_cmd, solve, DT_FMT, time_units_dict
 from .simulation.mf6api import Mf6API
 from .simulation.phreeqcbmi import PhreeqcBMI
 from .simulation.solver import Mf6RTM
@@ -30,7 +30,6 @@ __all__ = [
     "PhreeqcBMI",
     "Mf6RTM",
     "run_cmd",
-    "Solver",
     "solve",
     "DT_FMT",
     "time_units_dict",

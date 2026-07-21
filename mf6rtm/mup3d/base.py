@@ -179,6 +179,13 @@ class KineticPhases(Block):
         self.parameters = None
 
     def set_parameters(self, parameters):
+        """Set the kinetic phase parameters.
+
+        Parameters
+        ----------
+        parameters : dict
+            Parameters for the kinetic phases, keyed by mineral/phase name.
+        """
         self.parameters = parameters
 
 class Surfaces(Block):
@@ -223,12 +230,40 @@ class ChemStress():
         self.cells = None
 
     def set_spd(self, sol_spd):
+        """Set the solution stress period data.
+
+        Parameters
+        ----------
+        sol_spd : list of int
+            Solution indices, one per boundary cell, mapping each cell to a
+            PHREEQC solution number.
+        """
         self.sol_spd = sol_spd
 
     def set_type(self, type):
+        """Set the boundary coupling type.
+
+        Parameters
+        ----------
+        type : {'aux', 'cnc', 'src'}
+            Boundary coupling type: ``'aux'`` (GWF stress package + GWT SSM),
+            ``'cnc'`` (GWT constant-concentration), or ``'src'`` (GWT
+            mass-loading).
+        """
         self.type = type
 
     def set_cells(self, cells):
+        """Set the boundary cell ids.
+
+        Required for ``'cnc'`` and ``'src'`` types; for ``'aux'`` the cells
+        are taken from the GWF package stress period data.
+
+        Parameters
+        ----------
+        cells : list of tuple
+            Cell ids, e.g. ``(layer, row, col)`` for DIS or
+            ``(layer, cell2d)`` for DISV.
+        """
         self.cells = cells
 
 
@@ -572,20 +607,14 @@ class Mup3d(object):
         self.initialize_chem_stress(attribute_name)
 
     def set_wd(self, wd):
-        """
-        Sets the working directory for the MF6RTM model.
+        """Set the working directory for the MF6RTM model.
+
+        The directory is created if it does not already exist.
 
         Parameters
         ----------
-        wd (str): The path to the working directory.
-
-        Returns
-        -------
-        None
-
-        Raises
-        ------
-        AssertionError: If the working directory path is not a string.
+        wd : str
+            The path to the working directory.
         """
         # get absolute path of the working directory
         wd = Path(os.path.abspath(wd))
@@ -595,16 +624,15 @@ class Mup3d(object):
         self.wd = wd
 
     def set_database(self, database):
-        """
-        Sets the database for the MF6RTM model.
+        """Set the database for the MF6RTM model.
 
-        Parameters:
+        Copies the database file into the working directory for
+        self-containment.
+
+        Parameters
         ----------
-        database (str): The path to the database file.
-
-        Returns:
-        -------
-        None
+        database : str
+            The path to the database file.
         """
         try:
             assert os.path.exists(database), f"{database} not found"
@@ -623,16 +651,17 @@ class Mup3d(object):
         self.database = database
 
     def set_postfix(self, postfix):
-        """
-        Sets the postfix file for the MF6RTM model.
+        """Set the postfix file for the MF6RTM model.
 
-        Parameters:
+        Parameters
         ----------
-        postfix (str): The path to the postfix file.
+        postfix : str
+            The path to the postfix file.
 
-        Returns:
-        -------
-        None
+        Raises
+        ------
+        AssertionError
+            If the postfix file does not exist.
         """
         assert os.path.exists(postfix), f'{postfix} not found'
         self.postfix = postfix
@@ -1189,8 +1218,9 @@ class Mup3d(object):
             )
             self._gwt_sim.register_ims_package(ims, [component])
 
-            # DIS — copy from GWF (shared grid)
-            if gwf.get_package('dis') is not None:
+            # DIS/DISV — copy from GWF (shared grid). Detect the grid type with
+            distype = gwf.get_grid_type().name
+            if distype == 'DIS':
                 d = gwf.dis
                 flopy.mf6.ModflowGwtdis(
                     gwt,
@@ -1204,7 +1234,7 @@ class Mup3d(object):
                     idomain=d.idomain.get_data() if d.idomain is not None else None,
                     filename=f"{component}.dis",
                 )
-            elif gwf.get_package('disv') is not None:
+            elif distype == 'DISV':
                 d = gwf.disv
                 flopy.mf6.ModflowGwtdisv(
                     gwt,

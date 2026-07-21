@@ -66,7 +66,7 @@ mf6rtm represents a significant advancement in reactive transport modeling by:
 Getting Started
 ---------------
 
-.. To get started with mf6rtm, see the :doc:`tutorials/index` (if available) 
+To get started with mf6rtm, see the :doc:`tutorials/index`
 or explore the :doc:`api/modules` documentation.
 
 Installation

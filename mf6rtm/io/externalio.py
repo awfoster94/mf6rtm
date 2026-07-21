@@ -57,13 +57,18 @@ class Regenerator:
     """
     def __init__(self, wd='.', phinp='phinp.dat',
                  yamlfile='mf6rtm.yaml', dllfile='libmf6.dll'):
-        """
-        Initialize the Regenerator with the working directory and phinp file.
+        """Initialize the Regenerator with the working directory and input files.
 
-        Parameters:
-            wd (str): Working directory where the phinp file is located.
-            phinp (str): Name of the phinp file.
-            yamlfile (str): Name of the YAML file to be used.
+        Parameters
+        ----------
+        wd : str, optional
+            Working directory where the phinp file is located. Default is ``"."``.
+        phinp : str, optional
+            Name of the phinp file. Default is ``"phinp.dat"``.
+        yamlfile : str, optional
+            Name of the PhreeqcRM YAML file to use. Default is ``"mf6rtm.yaml"``.
+        dllfile : str, optional
+            Name of the MODFLOW 6 shared library. Default is ``"libmf6.dll"``.
         """
         self.wd = os.path.abspath(wd)
         self.yamlfile = os.path.join(self.wd, yamlfile)
@@ -82,8 +87,25 @@ class Regenerator:
                                        yamlfile='mf6rtm.yaml',
                                        dllfile='libmf6.dll',
                                        prefix='_'):
-        """
-        Class method to execute the regeneration process.
+        """Regenerate the PHREEQC script and YAML from external files.
+
+        Parameters
+        ----------
+        wd : str, optional
+            Working directory. Default is ``"."``.
+        phinpfile : str, optional
+            Name of the source phinp file. Default is ``"phinp.dat"``.
+        yamlfile : str, optional
+            Name of the PhreeqcRM YAML file. Default is ``"mf6rtm.yaml"``.
+        dllfile : str, optional
+            Name of the MODFLOW 6 shared library. Default is ``"libmf6.dll"``.
+        prefix : str, optional
+            Prefix for the regenerated output files. Default is ``"_"``.
+
+        Returns
+        -------
+        Regenerator
+            The instance after writing the regenerated script and YAML.
         """
         instance = cls(
             wd=wd,
@@ -119,6 +141,13 @@ class Regenerator:
                         raise FileNotFoundError(f"Required file '{file_path}' for key '{key}' not found in working directory '{self.wd}'.")
 
     def read_phinp(self):
+        """Read the PHREEQC input script from disk.
+
+        Returns
+        -------
+        list of str
+            Lines of the ``phinp`` file in the working directory.
+        """
         with open(os.path.join(self.wd, self.phinp), 'r') as f:
             script = f.readlines()
         return script
@@ -178,6 +207,16 @@ class Regenerator:
 
     def update_yaml(self, filename='_mf6rtm.yaml'):
         """Update the YAML file with the regenerated script and initial conditions.
+
+        Parameters
+        ----------
+        filename : str, optional
+            Name of the YAML file to write. Default is ``"_mf6rtm.yaml"``.
+
+        Returns
+        -------
+        numpy.ndarray
+            The flattened initial-condition array written to PhreeqcRM.
         """
         yamlphreeqcrm, ic1 = load_yaml_to_phreeqcrm(self.yamlfile)
         ic1 = ic1.reshape(7, self.nxyz).T
@@ -277,8 +316,17 @@ class Regenerator:
         return self.regenerated_script
 
     def write_new_script(self, filename='_phinp.dat'):
-        """
-        Write the regenerated script to a file.
+        """Write the regenerated script to a file.
+
+        Parameters
+        ----------
+        filename : str, optional
+            Name of the output script file. Default is ``"_phinp.dat"``.
+
+        Returns
+        -------
+        str
+            Full path to the written script file.
         """
         if not hasattr(self, 'regenerated_script'):
             self.generate_new_script()
@@ -289,8 +337,12 @@ class Regenerator:
         return self.regenerated_phinp
 
     def generate_equilibrium_phases_blocks(self):
-        """
-        Generate equilibrium phases blocks from the config.
+        """Generate per-cell EQUILIBRIUM_PHASES blocks from the config.
+
+        Returns
+        -------
+        list of str
+            One ``EQUILIBRIUM_PHASES`` block string per grid cell.
         """
         self.add_m0_to_config()
         equilibrium_phases = self.config.get('equilibrium_phases', {})
@@ -309,8 +361,12 @@ class Regenerator:
         return blocks
 
     def generate_kinetic_phases_blocks(self):
-        """
-        Generate kinetic phases blocks from the config.
+        """Generate per-cell KINETICS blocks from the config.
+
+        Returns
+        -------
+        list of str
+            One ``KINETICS`` block string per grid cell.
         """
         self.add_m0_to_config()
         kinetic_phases = self.config.get('kinetic_phases', {})
@@ -340,8 +396,12 @@ class Regenerator:
         return blocks
 
     def generate_exchange_phases_blocks(self):
-        """
-        Generate exchange blocks from the config.
+        """Generate per-cell EXCHANGE blocks from the config.
+
+        Returns
+        -------
+        list of str
+            One ``EXCHANGE`` block string per grid cell.
         """
         self.add_m0_to_config()
         exchange = self.config.get('exchange_phases', {})
@@ -361,9 +421,13 @@ class Regenerator:
         return blocks
 
     def read_external_files(self):
-        """
-        Read the external files required for regeneration using numpy.
-        Returns a dictionary with the loaded arrays organized by key, name, and layer.
+        """Read the external phase files required for regeneration.
+
+        Returns
+        -------
+        dict
+            Loaded arrays organized by phase key and name, reshaped to the
+            grid dimensions; also stored on ``self.file_data``.
         """
         grid_type = ...
 
@@ -427,9 +491,14 @@ class Regenerator:
         return file_data
 
     def add_m0_to_config(self):
-        """
-        Add the loaded array data to the config dictionary.
-        This method should be called after read_external_files().
+        """Add the loaded array data to the config dictionary.
+
+        Reads the external files first if they have not been loaded yet.
+
+        Returns
+        -------
+        dict
+            The configuration dictionary with ``m0`` arrays added per phase.
         """
         if not hasattr(self, 'file_data'):
             self.read_external_files()
@@ -447,6 +516,24 @@ class Regenerator:
         return self.config
 
 class SelectedOutput:
+    """Collects and writes PhreeqcRM selected output for a run.
+
+    Reads the PhreeqcRM selected-output block each reactive time step and
+    writes it (with cell ids and saturation) to CSV or HDF5, and optionally
+    exports machine-learning feature arrays.
+
+    Parameters
+    ----------
+    mf6rtm : Mf6RTM
+        The parent reactive transport instance, providing the MF6 and
+        PhreeqcRM interfaces.
+    sout_fname : str, optional
+        Output filename. Default is ``"sout.csv"``. A ``.h5``/``.hdf5``
+        extension switches the format to HDF5.
+    output_format : {'csv', 'hdf5'}, optional
+        Output format. Default is ``"csv"``. HDF5 requires PyTables.
+    """
+
     def __init__(self, mf6rtm, sout_fname: str = "sout.csv", output_format: str = "csv"):
         self.mf6rtm = mf6rtm
         self.phreeqcbmi = mf6rtm.phreeqcbmi

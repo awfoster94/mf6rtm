@@ -1,9 +1,29 @@
+"""MODFLOW 6 API wrapper for mf6rtm.
+
+Defines :class:`Mf6API`, a subclass of ``modflowapi.ModflowApi`` that loads
+the coupled flow/transport simulation and drives its solve loop inside the
+mf6rtm coupling.
+"""
 from datetime import datetime
 import flopy
 import modflowapi
 
 
 class Mf6API(modflowapi.ModflowApi):
+    """MODFLOW 6 API wrapper driving the flow and transport solve.
+
+    Extends ``modflowapi.ModflowApi`` to load the coupled simulation and run
+    the per-timestep GWF/GWT solve loop that :class:`Mf6RTM` alternates with
+    the PhreeqcRM reaction step.
+
+    Parameters
+    ----------
+    wd : os.PathLike
+        Working directory containing the MODFLOW 6 simulation.
+    dll : os.PathLike
+        Path to the MODFLOW 6 shared library (libmf6).
+    """
+
     def __init__(self, wd, dll):
         # TODO: reverse the order of args to match modflowapi?
         modflowapi.ModflowApi.__init__(self, dll, working_directory=wd)
@@ -90,7 +110,7 @@ class Mf6API(modflowapi.ModflowApi):
 
     @property
     def grid_type(self) -> str:
-        """Grid type of the ModFlow6 model"""
+        """Return the grid type of the MODFLOW 6 model."""
         mf6 = self.sim.get_model(self.sim.model_names[0])
         distype = mf6.get_grid_type().name
         return distype

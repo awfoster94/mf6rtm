@@ -7,10 +7,41 @@ import math
 
 
 def total_cells_in_grid(modflow_api: Mf6API) -> int:
+    """Return the total number of cells in the MODFLOW 6 grid.
+
+    Parameters
+    ----------
+    modflow_api : Mf6API
+        MODFLOW 6 API instance to query the grid from.
+
+    Returns
+    -------
+    int
+        Product of the grid dimensions (``nlay * nrow * ncol`` for DIS,
+        ``nlay * ncpl`` for DISV).
+    """
     return math.prod(grid_dimensions(modflow_api))
 
 
 def grid_dimensions(modflow_api: Mf6API) -> tuple[int, ...]:
+    """Return the grid dimensions for the MODFLOW 6 model.
+
+    Parameters
+    ----------
+    modflow_api : Mf6API
+        MODFLOW 6 API instance to query the grid from.
+
+    Returns
+    -------
+    tuple of int
+        ``(nlay, nrow, ncol)`` for a DIS grid or ``(nlay, ncpl)`` for a DISV
+        grid.
+
+    Raises
+    ------
+    ValueError
+        If the grid type is not supported (only DIS and DISV are).
+    """
     grid_type = modflow_api.grid_type.upper()
     try:
         return __DISCRETIZATION_FUNCTIONS[grid_type](modflow_api)

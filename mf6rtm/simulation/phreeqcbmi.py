@@ -1,3 +1,9 @@
+"""PHREEQC BMI wrapper for mf6rtm.
+
+Defines :class:`PhreeqcBMI`, a thin subclass of ``phreeqcrm.BMIPhreeqcRM``
+that adapts the PhreeqcRM Basic Model Interface for use inside the mf6rtm
+coupling loop.
+"""
 from datetime import datetime
 import warnings
 
@@ -9,6 +15,19 @@ from mf6rtm.simulation.mf6api import Mf6API
 
 
 class PhreeqcBMI(phreeqcrm.BMIPhreeqcRM):
+    """Basic Model Interface wrapper around PhreeqcRM.
+
+    Extends ``phreeqcrm.BMIPhreeqcRM`` with helpers used by :class:`Mf6RTM`
+    to run the geochemical reaction step: scalar setters, selected-output
+    handling and per-timestep solution updates.
+
+    Parameters
+    ----------
+    yaml : str, optional
+        Path to the PhreeqcRM YAML configuration file used to initialize the
+        chemistry. Default is ``"mf6rtm.yaml"``.
+    """
+
     def __init__(self, yaml="mf6rtm.yaml"):
         phreeqcrm.BMIPhreeqcRM.__init__(self)
         print("Processing initial chemistry configuration")
@@ -16,7 +35,13 @@ class PhreeqcBMI(phreeqcrm.BMIPhreeqcRM):
         self.sat_now = None
 
     def get_grid_to_map(self):
-        """Function to get grid to map"""
+        """Get the PhreeqcRM grid-to-map mapping.
+
+        Returns
+        -------
+        array-like
+            The grid-to-map mapping returned by ``GetGridToMap``.
+        """
         return self.GetGridToMap()
 
     def _prepare_phreeqcrm_bmi(self):
@@ -38,6 +63,20 @@ class PhreeqcBMI(phreeqcrm.BMIPhreeqcRM):
         self.ctime = ctime
 
     def set_scalar(self, var_name, value):
+        """Set a scalar PhreeqcRM BMI variable.
+
+        Parameters
+        ----------
+        var_name : str
+            Name of the BMI variable to set.
+        value : Any
+            Scalar value to assign; cast to the variable's declared dtype.
+
+        Raises
+        ------
+        ValueError
+            If ``var_name`` does not refer to a scalar (dimension != 1).
+        """
         itemsize = self.get_var_itemsize(var_name)
         nbytes = self.get_var_nbytes(var_name)
         dim = nbytes // itemsize
