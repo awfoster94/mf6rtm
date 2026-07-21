@@ -33,6 +33,23 @@ time_units_dict = {
 }
 
 def check_config_file(wd: os.PathLike) -> tuple[os.PathLike, os.PathLike]:
+    """Load and validate the mf6rtm TOML configuration for a run.
+
+    Parameters
+    ----------
+    wd : os.PathLike
+        Model working directory; must contain ``mf6rtm.toml``.
+
+    Returns
+    -------
+    MF6RTMConfig
+        The loaded, validated configuration.
+
+    Raises
+    ------
+    AssertionError
+        If ``mf6rtm.toml`` is not found in ``wd``.
+    """
     assert os.path.exists(
         os.path.join(wd, "mf6rtm.toml")
         ), "mf6rtm.toml not found in model directory"
@@ -44,7 +61,23 @@ def check_config_file(wd: os.PathLike) -> tuple[os.PathLike, os.PathLike]:
     return config
 
 def check_nam_files(wd:os.PathLike) -> tuple[os.PathLike,os.PathLike]:
-    """Check if the nam files are present in the model directory"""
+    """Check that the required MODFLOW 6 name file is present.
+
+    Parameters
+    ----------
+    wd : os.PathLike
+        Model working directory to search for ``.nam`` files.
+
+    Returns
+    -------
+    os.PathLike
+        Path to ``mfsim.nam`` in the working directory.
+
+    Raises
+    ------
+    AssertionError
+        If ``mfsim.nam`` is not found in ``wd``.
+    """
     nam = [f for f in os.listdir(wd) if f.endswith(".nam")]
     assert "mfsim.nam" in nam, "mfsim.nam file not found in model directory"
     # assert "gwf.nam" in nam, "gwf.nam file not found in model directory"
@@ -112,10 +145,42 @@ def prep_to_run(wd:os.PathLike, libname: Path | None = None) -> tuple[os.PathLik
     ), f"{yamlfile} not found in model directory {wd}"
     return yamlfile, dll
 
-def solve(wd:os.PathLike, reactive: bool | None = None, nthread: int = 1, libname: Path | None = None, **mf6rtm_kwargs) -> bool:
-    """Wrapper to prepare and call solve functions"""
+def solve(wd:os.PathLike, reactive: bool | None = None, nthread: int = 1, libname: Path | None = None,
+          output_format: str = None, **mf6rtm_kwargs) -> bool:
+    """Prepare the coupled interfaces and run the reactive transport solve.
 
-    mf6rtm = initialize_interfaces(wd, nthread=nthread, libname=libname)
+    Parameters
+    ----------
+    wd : os.PathLike
+        Model working directory.
+    reactive : bool or None, optional
+        If given, override the reactive mode taken from the configuration.
+        When it differs from the configured value the mode is switched (and
+        selected output is left to MODFLOW 6 for conservative runs).
+        Default is None.
+    nthread : int, optional
+        Number of threads for PhreeqcRM. Default is 1.
+    libname : pathlib.Path or None, optional
+        Path to the MODFLOW 6 shared library. Default is None.
+    output_format : str, optional
+        Selected-output format (e.g. ``"csv"`` or ``"hdf5"``). Default is None.
+    **mf6rtm_kwargs
+        Additional attributes to set on the :class:`Mf6RTM` instance before
+        solving; each key must be an existing attribute.
+
+    Returns
+    -------
+    bool
+        True if the simulation finished successfully.
+
+    Raises
+    ------
+    AttributeError
+        If a keyword in ``mf6rtm_kwargs`` is not an attribute of :class:`Mf6RTM`.
+    """
+
+    mf6rtm = initialize_interfaces(wd, nthread=nthread, libname=libname,
+                                   output_format=output_format)
     for key, val in mf6rtm_kwargs.items():
         if not hasattr(mf6rtm, key):
             raise AttributeError(f"Mf6RTM has no attribute '{key}'")
@@ -135,8 +200,28 @@ def solve(wd:os.PathLike, reactive: bool | None = None, nthread: int = 1, libnam
 
 
 # TODO: we should maybe move this into the Mf6API as an alternative constructor
-def initialize_interfaces(wd:os.PathLike, nthread: int = 1, libname: Path | None = None) -> Mf6API:
-    """Function to initialize the interfaces for modflowapi and phreeqcrm and returns the mf6rtm object"""
+def initialize_interfaces(wd:os.PathLike, nthread: int = 1, libname: Path | None = None,
+                           output_format: str = None) -> Mf6API:
+    """Initialize the MODFLOW 6 and PhreeqcRM interfaces.
+
+    Parameters
+    ----------
+    wd : os.PathLike
+        Model working directory.
+    nthread : int, optional
+        Number of threads for PhreeqcRM; values greater than 1 are written
+        into the YAML file. Default is 1.
+    libname : pathlib.Path or None, optional
+        Path to the MODFLOW 6 shared library. Default is None.
+    output_format : str, optional
+        Selected-output format passed to the :class:`Mf6RTM` instance.
+        Default is None.
+
+    Returns
+    -------
+    Mf6RTM
+        The coupled reactive transport object wrapping both interfaces.
+    """
 
     yamlfile, dll = prep_to_run(wd, libname=libname)
 
@@ -147,12 +232,20 @@ def initialize_interfaces(wd:os.PathLike, nthread: int = 1, libname: Path | None
     # initialize the interfaces
     mf6api = Mf6API(wd, dll)
     phreeqcrm = PhreeqcBMI(yamlfile) #FIXME: Does not work with path like
-    mf6rtm = Mf6RTM(wd, mf6api, phreeqcrm)
+    mf6rtm = Mf6RTM(wd, mf6api, phreeqcrm, output_format=output_format)
     return mf6rtm
 
 
 def set_nthread_yaml(yamlfile:os.PathLike, nthread: int = 1) -> None:
-    """Function to set the number of threads in the yaml file"""
+    """Set the number of threads in the PhreeqcRM YAML file.
+
+    Parameters
+    ----------
+    yamlfile : os.PathLike
+        Path to the PhreeqcRM YAML file to modify in place.
+    nthread : int, optional
+        Number of threads to write to the ``nthreads`` entry. Default is 1.
+    """
     with open(yamlfile, "r") as f:
         lines = f.readlines()
     for i, line in enumerate(lines):
@@ -164,11 +257,24 @@ def set_nthread_yaml(yamlfile:os.PathLike, nthread: int = 1) -> None:
 
 
 class Mf6RTM(object):
+    """Reactive transport loop coupling MODFLOW 6 and PhreeqcRM.
+
+    Drives the sequential non-iterative (SNIA) operator-splitting loop: each
+    time step MODFLOW 6 solves flow and conservative transport, the resulting
+    concentrations are handed to PhreeqcRM to solve chemistry, and
+    the reacted concentrations are written back to the transport models.
+
+    Instances are normally created via :func:`prep_to_run` and run with
+    :func:`solve` rather than constructed directly. See ``__init__`` for the
+    full list of parameters and attributes.
+    """
+
     def __init__(
         self,
         wd:os.PathLike,
         mf6api: Mf6API,
         phreeqcbmi: PhreeqcBMI,
+        output_format: str = None,
     ) -> None:
         """
         Initialize the Mf6RTM instance with specified working directory, MF6API,
@@ -230,7 +336,8 @@ class Mf6RTM(object):
         self.wd = Path(wd)
         self.threshold = 1e-10
         self.fixed_components = None
-        self.selected_output = SelectedOutput(self)
+        # flat nxyz indices excluded from reactions (still transported by mf6)
+        self.no_react_idx = None
 
         # set component model dictionary & list of conservative_transport_models
         self.component_model_dict, self.conservative_transport_models = self._create_component_model_dict()
@@ -243,7 +350,18 @@ class Mf6RTM(object):
         self.config = MF6RTMConfig.from_toml_file(self.wd/"mf6rtm.toml")
         self.reactive = self.config.reactive['enabled']
         self.min_concentration = self.config.solver.get('min_concentration', None)
+        nr = self.config.solver.get('no_react_cells', None)
+        if nr is not None:
+            self.no_react_idx = np.array(nr, dtype=int)
         self.set_emulator_training()
+
+        # output settings: constructor param overrides config file value
+        out_cfg = getattr(self.config, 'output', {})
+        _output_format = output_format if output_format is not None else out_cfg.get('output_format', 'csv')
+        if _output_format in ("h5", "hdf5", "hdf"):
+            _output_format = "hdf5"
+        _sout_fname = "sout.h5" if _output_format == "hdf5" else "sout.csv"
+        self.selected_output = SelectedOutput(self, sout_fname=_sout_fname, output_format=_output_format)
 
     def set_emulator_training(self) -> None:
         """
@@ -294,9 +412,7 @@ class Mf6RTM(object):
         )
 
     def print_warning_user_active(self):
-        """
-        Prints a warning if reaction timing is set to 'user'.
-        """
+        """Print a warning if reaction timing is set to 'user'."""
         if self.config.reactive['timing'] == 'user':
             print(f"WARNING: Running reaction only in the following periods and time steps:")
             for period, timestep in self.config.reactive['tsteps']:
@@ -305,16 +421,15 @@ class Mf6RTM(object):
             return
 
     def get_saturation_from_mf6(self) -> dict[Any, np.ndarray]:
-        """
-        Get the saturation
+        """Get the cell saturation array from MODFLOW 6.
 
-        Parameters
-        ----------
-        mf6 (modflowapi): the modflow api object
+        Reads the saturation for the transport models and stores it on the
+        PhreeqcRM interface (``sat_now``).
 
         Returns
         -------
-        array: the saturation
+        numpy.ndarray
+            Saturation values for the grid; identical across all components.
         """
         sat = {
             component: self.mf6api.get_value(
@@ -333,11 +448,17 @@ class Mf6RTM(object):
         return sat
 
     def get_time_units_from_mf6(self) -> str:
-        """Function to get the time units from mf6"""
+        """Get the simulation time units from MODFLOW 6.
+
+        Returns
+        -------
+        str
+            The MODFLOW 6 TDIS time units (e.g. ``"days"``).
+        """
         return self.mf6api.sim.tdis.time_units.get_data()
 
     def set_time_conversion(self) -> None:
-        """Function to set the time conversion factor"""
+        """Set the time conversion factor from the MODFLOW 6 time units."""
         time_units = self.get_time_units_from_mf6()
         self.time_conversion = 1.0 / time_units_dict[time_units]
         self.phreeqcbmi.SetTimeConversion(self.time_conversion)
@@ -544,11 +665,13 @@ class Mf6RTM(object):
         return self.solve()
 
     def is_reactive_tstep(self) -> bool:
-        """
-        Check if the current timestep should be reactive based on configuration.
+        """Check whether the current timestep should be reactive.
 
-        Returns:
-            bool: True if current timestep should be reactive, False otherwise
+        Returns
+        -------
+        bool
+            True if the current timestep should be reactive, based on the run
+            configuration; False otherwise.
         """
         # Early return if not in reactive mode
 
@@ -569,6 +692,16 @@ class Mf6RTM(object):
             return True
 
     def set_kiter(self) -> int:
+        """Increment and return the coupling iteration counter.
+
+        Initializes ``kiter`` to 0 on the first call, then increments it on
+        each subsequent call.
+
+        Returns
+        -------
+        int
+            The current iteration counter.
+        """
         if hasattr(self, "kiter"):
             self.kiter += 1
         else:
@@ -576,13 +709,21 @@ class Mf6RTM(object):
         return self.kiter
 
     def solve(self) -> bool:
-        """Solve the model"""
+        """Run the coupled MODFLOW 6 / PhreeqcRM time-stepping loop.
+
+        Returns
+        -------
+        bool
+            True if the run finished and both interfaces were finalized
+            successfully.
+        """
         success = False  # initialize success flag
         sim_start = datetime.now()
         self._prepare_to_solve()
 
-        # check sout was created
-        assert self.selected_output._check_sout_exist(), f"{self.selected_output.sout_fname} not found"
+        # HDF5 file is created on first append; CSV is created by _write_sout_headers
+        if self.selected_output.output_format != "hdf5":
+            assert self.selected_output._check_sout_exist(), f"{self.selected_output.sout_fname} not found"
 
         if self.min_concentration is not None:
             print(f"Truncating concentrations at {self.min_concentration:.2e} mol/L")
@@ -601,6 +742,7 @@ class Mf6RTM(object):
             self.get_saturation_from_mf6()
             # check_reactive_kstp()
             if self.is_reactive_tstep():
+                self.phreeqcbmi.SetSaturation(self.phreeqcbmi.sat_now)
                 c_dbl_vect, mf6_conc_m3_array = self._transfer_array_to_phreeqcrm()
                 self.phreeqcbmi._get_kper_kstp_from_mf6api(self.mf6api)
                             # Moved from `_transfer_array_to_phreeqcrm()`
@@ -624,6 +766,8 @@ class Mf6RTM(object):
                         threshold=self.threshold,
                     )
                     self.diffmask = diffmask
+                if self.no_react_idx is not None:
+                    self.diffmask[self.no_react_idx] = 0
                 # solve reactions
                 self.phreeqcbmi._solve_phreeqcrm(dt, diffmask=self.diffmask)
                 mf6_conc_m3_array = self._transfer_array_to_mf6()
@@ -656,12 +800,12 @@ class Mf6RTM(object):
         try:
             self._finalize()
             success = True
-            print(mrbeaker())
+            # print(mrbeaker())
             print(
-                "\nMR BEAKER IMPORTANT MESSAGE: MODEL RUN FINISHED BUT CHECK THE RESULTS .. THEY ARE PROLY RUBBISH\n"
+                "\nMODEL RUN FINISHED BUT CHECK THE RESULTS\n"
             )
         except:
-            print("MR BEAKER IMPORTANT MESSAGE: SOMETHING WENT WRONG. BUMMER\n")
+            print("SOMETHING WENT WRONG. BUMMER\n")
             pass
         print(
             "Solution finished at {0}. Running time: {1:10.5G} mins".format(
@@ -672,13 +816,38 @@ class Mf6RTM(object):
 
 
 def get_less_than_zero_idx(arr):
-    """Function to get the index of all occurrences of <0 in an array"""
+    """Get the indices of all negative values in an array.
+
+    Parameters
+    ----------
+    arr : array-like
+        Input array to test.
+
+    Returns
+    -------
+    tuple of numpy.ndarray
+        The result of ``numpy.where(arr < 0)``: index arrays for elements
+        less than zero.
+    """
     idx = np.where(arr < 0)
     return idx
 
 
 def get_inactive_idx(arr: np.ndarray, val: float = 1e30):
-    """Function to get the index of all occurrences of <0 in an array"""
+    """Get the indices of values greater than or equal to a threshold.
+
+    Parameters
+    ----------
+    arr : numpy.ndarray
+        Input array to test.
+    val : float, optional
+        Threshold marking inactive/dry cells. Default is 1e30.
+
+    Returns
+    -------
+    list of int
+        Indices of elements greater than or equal to ``val``.
+    """
     idx = list(np.where(arr >= val)[0])
     return idx
 
@@ -688,13 +857,25 @@ def get_conc_change_mask(
     ci: np.ndarray[tuple[int, int], np.float64], # previous_iteration_conc: 2D (ncomps, nxyz)
     threshold: float = 1e-15, # relative precision of a float64
 ) -> np.ndarray[np.float64]:
-    """Function to get the active-inactive cell mask for concentration change due to transport
-    to inform phreeqc which cells to update.
-    Parameters:
-    ck: current_iteration_conc: 2D array (ncomps, nxyz)
-    ci: previous_iteration_conc: 2D array(ncomps, nxyz)
-    Returns:
-    diffmask: 1D array of size nxyz with zeros for inactive cells
+    """Get the active/inactive cell mask for transport-driven concentration change.
+
+    Informs PhreeqcRM which cells to update: a cell is active (1) when any
+    component's relative concentration change exceeds ``threshold``.
+
+    Parameters
+    ----------
+    ck : numpy.ndarray
+        Current-iteration concentrations, 2D array (ncomps, nxyz).
+    ci : numpy.ndarray
+        Previous-iteration concentrations, 2D array (ncomps, nxyz).
+    threshold : float, optional
+        Relative-change threshold below which a cell is considered unchanged.
+        Default is 1e-15 (float64 relative precision).
+
+    Returns
+    -------
+    numpy.ndarray
+        1D mask of size nxyz: 0 for inactive cells, 1 for cells to update.
     """
     # get the difference between the two arrays and divide by ci
     relative_change = np.abs(np.divide(
@@ -710,9 +891,21 @@ def get_conc_change_mask(
 
 
 def longest_common_substring(strings):
-    """Function to find the longest common substring of a list of strings
-    Used here to find the common "stem" of the GWT model names for matching
-    with PhreeqcRM components.
+    """Find the longest common substring shared by a list of strings.
+
+    Used to find the common "stem" of the GWT model names for matching with
+    PhreeqcRM components.
+
+    Parameters
+    ----------
+    strings : list of str
+        Strings to compare.
+
+    Returns
+    -------
+    str
+        The longest substring common to all strings, or an empty string if
+        ``strings`` is empty or no common substring exists.
     """
     if not strings:
         return ""
@@ -741,7 +934,13 @@ def longest_common_substring(strings):
 
 
 def mrbeaker() -> str:
-    """ASCII art of Mr. Beaker"""
+    """Render the Mr. Beaker mascot image as ASCII art.
+
+    Returns
+    -------
+    str
+        Multi-line ASCII-art representation of the Mr. Beaker image.
+    """
 
     from mf6rtm.assets import mrbeaker_path
 

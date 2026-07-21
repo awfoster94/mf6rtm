@@ -1,3 +1,4 @@
+"""Helpers to reconstruct a YAMLPhreeqcRM instance from a YAML file."""
 import yaml
 import numpy as np
 import warnings
@@ -8,14 +9,17 @@ except ImportError:
     warnings.warn("phreeqcrm not found.", ImportWarning)
 
 def load_yaml_to_phreeqcrm(yaml_file_path):
-    """
-    Load a YAML file and reconstruct a YAMLPhreeqcRM instance.
+    """Load a YAML file and reconstruct a YAMLPhreeqcRM instance.
 
-    Args:
-        yaml_file_path (str): Path to the YAML file
+    Parameters
+    ----------
+    yaml_file_path : str
+        Path to the YAML file.
 
-    Returns:
-        YAMLPhreeqcRM: Reconstructed instance
+    Returns
+    -------
+    YAMLPhreeqcRM
+        Reconstructed instance.
     """
 
     # Read the YAML file

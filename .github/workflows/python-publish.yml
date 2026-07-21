@@ -1,40 +1,81 @@
-name: Upload Python Package
+name: Release
 
+# Manual release: pick a bump level, this bumps the version, pushes it,
+# builds, publishes to PyPI (Trusted Publishing / OIDC), and cuts a GitHub Release.
+# Dispatch this on the branch you are releasing (e.g. main after develop -> main).
+#
+# NOTE: filename kept as python-publish.yml so the existing PyPI trusted-publisher
+# registration keeps working. PyPI matches the workflow *filename*, not its name.
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+    inputs:
+      level:
+        description: "Version bump level"
+        required: true
+        default: pre_l
+        type: choice
+        options:
+          - pre_l    # finalize a dev release: 0.5.0.dev0 -> 0.5.0  (publishes)
+          - pre_n    # iterate dev:           0.5.0.dev0 -> 0.5.0.dev1
+          - patch    #                        0.5.0      -> 0.5.1.dev0
+          - minor    #                        0.5.0      -> 0.6.0.dev0
+          - major    #                        0.5.0      -> 1.0.0.dev0
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 permissions:
-  contents: read
-  id-token: write  # Required for trusted publishing
+  contents: write   # push the version-bump commit + create the tag/release
+  id-token: write   # PyPI Trusted Publishing (OIDC)
 
 jobs:
-  deploy:
+  release:
     runs-on: ubuntu-latest
-    env:
-      CI: true  # Add this to enable CI mode
-
     steps:
       - uses: actions/checkout@v4
-      
+        with:
+          fetch-depth: 0        # full history so bump-my-version + tagging work
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
-          
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install build twine
+          python-version: "3.x"
 
-      - name: Update version in setup.cfg
+      - name: Install tooling
+        run: python -m pip install --upgrade pip build bump-my-version
+
+      - name: Configure git identity
         run: |
-          TAG_VERSION=${GITHUB_REF#refs/*/}
-          echo "Version from tag: $TAG_VERSION"
-          sed -i "s/^version *= *.*/version = $TAG_VERSION/" setup.cfg
-            
-      - name: Build and publish
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version
+        run: bump-my-version bump "${{ inputs.level }}"
+
+      - name: Read new version
+        id: ver
+        run: echo "version=$(bump-my-version show current_version)" >> "$GITHUB_OUTPUT"
+
+      - name: Push version bump
+        run: git push origin HEAD:${{ github.ref_name }}
+
+      # Publish + release only when finalizing (pre_l -> a real X.Y.Z).
+      # Other levels (minor/patch/major/pre_n) just bump+push for the next cycle.
+      - name: Build distributions
+        if: inputs.level == 'pre_l'
+        run: python -m build
+
+      - name: Publish to PyPI (Trusted Publishing)
+        if: inputs.level == 'pre_l'
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Create GitHub Release
+        if: inputs.level == 'pre_l'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          python -m pip install -e .  # Install in development mode
-          python -m build
-          python -m twine upload dist/*
+          gh release create "${{ steps.ver.outputs.version }}" \
+            --target "$(git rev-parse HEAD)" \
+            --title "${{ steps.ver.outputs.version }}" \
+            --generate-notes

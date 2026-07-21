@@ -196,26 +196,39 @@ class TestSurfaces:
 
 class TestChemStress:
     """Test suite for ChemStress class."""
-    
+
     def test_chem_stress_initialization(self):
-        """Test ChemStress initialization."""
+        """Test ChemStress defaults to aux type."""
         stress = ChemStress('WEL-1')
         assert stress.packnme == 'WEL-1'
+        assert stress.type == 'aux'
         assert stress.sol_spd is None
-        assert stress.packtype is None
-    
+        assert stress.cells is None
+
+    def test_chem_stress_cnc_type(self):
+        """Test explicit cnc type."""
+        stress = ChemStress('inflow', type='cnc')
+        assert stress.type == 'cnc'
+
     def test_set_spd(self):
         """Test setting stress period data."""
         stress = ChemStress('WEL-1')
         spd = [1, 2, 3, 4, 5]
         stress.set_spd(spd)
         assert stress.sol_spd == spd
-    
-    def test_set_packtype(self):
-        """Test setting package type."""
-        stress = ChemStress('WEL-1')
-        stress.set_packtype('WEL')
-        assert stress.packtype == 'WEL'
+
+    def test_set_type(self):
+        """Test set_type changes the coupling type."""
+        stress = ChemStress('inflow')
+        stress.set_type('src')
+        assert stress.type == 'src'
+
+    def test_set_cells(self):
+        """Test set_cells stores cellids."""
+        stress = ChemStress('inflow', type='cnc')
+        cells = [(0, 0, 0), (0, 0, 1)]
+        stress.set_cells(cells)
+        assert stress.cells == cells
 
 
 # ==================== Mup3d Tests ====================
@@ -377,6 +390,49 @@ class TestMup3dSetters:
         fixed = ['H', 'O']
         model.set_fixed_components(fixed)
         assert model.fixed_components == fixed
+
+    def test_set_diffusion_coeff(self, sample_solutions_data):
+        """Test setting per-component diffusion coefficients."""
+        solutions = Solutions(sample_solutions_data)
+        solutions.set_ic(1)
+        model = Mup3d(solutions=solutions, nlay=1, nrow=1, ncol=3)
+        coeffs = {'Ca': 0.792e-9, 'Cl': 2.032e-9}
+        model.set_diffusion_coeff(coeffs)
+        assert model._diffusion_coeff == coeffs
+
+    def test_set_diffusion_coeff_overwrites(self, sample_solutions_data):
+        """Calling set_diffusion_coeff again replaces the previous mapping."""
+        solutions = Solutions(sample_solutions_data)
+        solutions.set_ic(1)
+        model = Mup3d(solutions=solutions, nlay=1, nrow=1, ncol=3)
+        model.set_diffusion_coeff({'Ca': 1e-9})
+        model.set_diffusion_coeff({'Cl': 2e-9})
+        assert model._diffusion_coeff == {'Cl': 2e-9}
+
+
+class TestResolveChargeSpecies:
+    """Test suite for Mup3d._resolve_charge_species (charge-flag resolution)."""
+
+    def test_true_defaults_to_ph(self):
+        assert Mup3d._resolve_charge_species(True) == "pH"
+
+    def test_string_returned_as_is(self):
+        assert Mup3d._resolve_charge_species("Cl") == "Cl"
+
+    def test_single_element_list_unwrapped(self):
+        assert Mup3d._resolve_charge_species(["Na"]) == "Na"
+
+    def test_single_element_tuple_unwrapped(self):
+        assert Mup3d._resolve_charge_species(("Na",)) == "Na"
+
+    def test_multiple_components_raise(self):
+        """Only one component may carry the charge flag."""
+        with pytest.raises(ValueError):
+            Mup3d._resolve_charge_species(["Na", "Cl"])
+
+    def test_invalid_type_raises(self):
+        with pytest.raises(TypeError):
+            Mup3d._resolve_charge_species(123)
 
 
 class TestMup3dPhases:
@@ -744,4 +800,436 @@ class TestTransferArrayToPhreeqcRM:
         passed = mock.phreeqcbmi.SetConcentrations.call_args[0][0]
         result_m3 = passed * 1e3
         np.testing.assert_allclose(result_m3, concs - 1e-3)
+
+
+# ==================== from_mf6 Structural Tests ====================
+
+_BENCHMARK_DB = Path(__file__).parent.parent / 'benchmark' / 'database' / 'pht3d_datab.dat'
+
+
+@pytest.fixture
+def benchmark_database():
+    """Path to the benchmark pht3d_datab.dat — skipped if not present."""
+    if not _BENCHMARK_DB.exists():
+        pytest.skip("Benchmark database not found; skipping from_mf6 integration test")
+    return str(_BENCHMARK_DB)
+
+
+class TestFromMf6:
+    """Structural tests for Mup3d.from_mf6 — no MF6 run required."""
+
+    @staticmethod
+    def _build_minimal_sim(sim_ws, nper=1):
+        """Minimal flopy sim: 3-cell GWF + tracer GWT with CHD aux + SSM.
+
+        ``nper`` stress periods are created; the inflow CHD (``chdin``) carries a
+        ``tracer`` aux and is given SPD rows for every period so per-period aux
+        expansion has something to attach to.
+        """
+        import flopy
+        sim = flopy.mf6.MFSimulation(
+            sim_name='test', sim_ws=str(sim_ws), exe_name='mf6'
+        )
+        flopy.mf6.ModflowTdis(sim, nper=nper,
+                              perioddata=[(1.0, 1, 1.0)] * nper,
+                              time_units='days')
+
+        gwf = flopy.mf6.ModflowGwf(sim, modelname='gwf', save_flows=True)
+        ims_gwf = flopy.mf6.ModflowIms(sim, filename='gwf.ims')
+        sim.register_ims_package(ims_gwf, ['gwf'])
+
+        flopy.mf6.ModflowGwfdis(gwf, nlay=1, nrow=1, ncol=3,
+                                 delr=1.0, delc=1.0, top=0.0, botm=-1.0,
+                                 filename='gwf.dis')
+        flopy.mf6.ModflowGwfnpf(gwf, k=1.0, filename='gwf.npf')
+        flopy.mf6.ModflowGwfic(gwf, strt=1.0, filename='gwf.ic')
+        chdin_spd = {k: [[(0, 0, 0), 1.0, 1.0]] for k in range(nper)}
+        flopy.mf6.ModflowGwfchd(
+            gwf, stress_period_data=chdin_spd,
+            auxiliary=['tracer'], pname='chdin', filename='gwf.chdin.chd',
+        )
+        flopy.mf6.ModflowGwfchd(
+            gwf, stress_period_data=[[(0, 0, 2), 0.0]],
+            pname='chdout', filename='gwf.chdout.chd',
+        )
+        flopy.mf6.ModflowGwfoc(gwf, head_filerecord='gwf.hds',
+                                budget_filerecord='gwf.cbb',
+                                saverecord=[('HEAD', 'ALL'), ('BUDGET', 'ALL')])
+
+        gwt = flopy.mf6.ModflowGwt(sim, modelname='gwt')
+        ims_gwt = flopy.mf6.ModflowIms(
+            sim, linear_acceleration='BICGSTAB', filename='gwt.ims'
+        )
+        sim.register_ims_package(ims_gwt, ['gwt'])
+
+        flopy.mf6.ModflowGwtdis(gwt, nlay=1, nrow=1, ncol=3,
+                                  delr=1.0, delc=1.0, top=0.0, botm=-1.0,
+                                  filename='gwt.dis')
+        flopy.mf6.ModflowGwtic(gwt, strt=0.0, filename='gwt.ic')
+        flopy.mf6.ModflowGwtssm(
+            gwt, sources=[['chdin', 'aux', 'tracer']], filename='gwt.ssm'
+        )
+        flopy.mf6.ModflowGwtadv(gwt, scheme='UPSTREAM')
+        flopy.mf6.ModflowGwtmst(gwt, porosity=0.3, filename='gwt.mst')
+        flopy.mf6.ModflowGwtoc(gwt, budget_filerecord='gwt.cbc',
+                                 concentration_filerecord='gwt.ucn',
+                                 saverecord=[('CONCENTRATION', 'ALL')])
+        flopy.mf6.ModflowGwfgwt(sim, exgtype='GWF6-GWT6',
+                                  exgmnamea='gwf', exgmnameb='gwt',
+                                  filename='gwf-gwt.gwfgwt')
+        return sim
+
+    def test_aux_and_cnc_file_structure(self, tmp_path, benchmark_database):
+        """write_simulation writes per-component CNC files and removes tracer GWT."""
+        sim_ws = tmp_path / 'conservative'
+        sim_ws.mkdir()
+        sim = self._build_minimal_sim(sim_ws)
+
+        solutions = Solutions({'Ca': [1e-4, 1e-3], 'Cl': [2e-4, 2e-3]})
+        solutions.set_ic(1)
+
+        model = Mup3d.from_mf6(sim, solutions, name='test', gwt_name='gwt')
+        model.set_database(benchmark_database)
+        model.initialize()
+
+        components = model.components
+        assert len(components) > 0
+
+        chdin_cs = ChemStress('chdin', type='aux')
+        chdin_cs.set_spd([2])
+        model.set_chem_stress(chdin_cs)
+
+        cnc_cs = ChemStress('cncout', type='cnc')
+        cnc_cs.set_spd([1])
+        cnc_cs.set_cells([(0, 0, 2)])
+        model.set_chem_stress(cnc_cs)
+
+        model.write_simulation()
+
+        written = set(os.listdir(model.wd))
+
+        # Tracer GWT model files must be gone
+        tracer_files = [f for f in written if f.startswith('gwt.') and not f.endswith('.ims')]
+        assert len(tracer_files) == 0, f'Tracer model files remain: {tracer_files}'
+
+        for c in components:
+            assert any(f.startswith(f'{c}.') for f in written), f'No GWT files for {c}'
+            assert f'{c}.ims' in written, f'Missing IMS for {c}'
+            assert f'{c}.cncout.cnc' in written, f'Missing CNC file for {c}'
+            assert f'{c}.gwfgwt' in written, f'Missing exchange for {c}'
+
+    def test_aux_per_period_switches_solution(self, tmp_path, benchmark_database):
+        """type='aux' with a per-period dict writes distinct aux columns per period.
+
+        Regression for from_mf6 aux ChemStress: set_spd({0:[2], 1:[3]}) must expand
+        the tracer aux into one column per component *per stress period* (period 0 =
+        solution 2, period 1 = solution 3). Previously the aux path indexed cs.data by
+        cell only, so a per-period dict produced wrong-width rows (MFDataException) and
+        never switched solution.
+        """
+        sim_ws = tmp_path / 'perperiod'
+        sim_ws.mkdir()
+        sim = self._build_minimal_sim(sim_ws, nper=2)
+
+        # three solutions (1,2,3) so per-period numbers 2 and 3 are valid
+        solutions = Solutions({'Ca': [1e-4, 1e-3, 5e-3], 'Cl': [2e-4, 2e-3, 5e-3]})
+        solutions.set_ic(1)
+
+        model = Mup3d.from_mf6(sim, solutions, name='test', gwt_name='gwt')
+        model.set_database(benchmark_database)
+        model.initialize()
+        ncomps = len(model.components)
+
+        chdin_cs = ChemStress('chdin', type='aux')
+        chdin_cs.set_spd({0: [2], 1: [3]})
+        model.set_chem_stress(chdin_cs)
+
+        # must not raise MFDataException about the wrong number of columns
+        model.write_simulation()
+
+        gwf_name = next(
+            n for n in model._gwt_sim.model_names
+            if model._gwt_sim.get_model(n).model_type == 'gwf6'
+        )
+        pkg = model._gwt_sim.get_model(gwf_name).get_package('chdin')
+        spd = pkg.stress_period_data.get_data()
+
+        # chdin record is (cellid, head, *concs) -> width = 2 base fields + ncomps,
+        # and the trailing ncomps fields are the component aux columns.
+        rec0 = tuple(spd[0][0])
+        rec1 = tuple(spd[1][0])
+        assert len(rec0) == 2 + ncomps
+        assert len(rec1) == 2 + ncomps
+        aux0 = rec0[-ncomps:]
+        aux1 = rec1[-ncomps:]
+
+        # each period carries its mapped solution's equilibrated concentrations
+        np.testing.assert_allclose(aux0, tuple(model.chdin.data[0][0]))
+        np.testing.assert_allclose(aux1, tuple(model.chdin.data[1][0]))
+
+        # the solution actually switched between the two periods
+        assert aux0 != aux1
+
+    def test_cnc_missing_cells_raises(self, tmp_path, benchmark_database):
+        """cnc ChemStress without set_cells raises ValueError at write_simulation."""
+        sim_ws = tmp_path / 'conservative'
+        sim_ws.mkdir()
+        sim = self._build_minimal_sim(sim_ws)
+
+        solutions = Solutions({'Ca': [1e-4, 1e-3], 'Cl': [2e-4, 2e-3]})
+        solutions.set_ic(1)
+
+        model = Mup3d.from_mf6(sim, solutions, name='test', gwt_name='gwt')
+        model.set_database(benchmark_database)
+        model.initialize()
+
+        cnc_cs = ChemStress('cncout', type='cnc')
+        cnc_cs.set_spd([1])
+        # intentionally omit set_cells
+        model.set_chem_stress(cnc_cs)
+
+        with pytest.raises(ValueError, match="cells is not set"):
+            model.write_simulation()
+
+    @staticmethod
+    def _build_minimal_sim_rcha(sim_ws):
+        """Minimal flopy sim: GWF with array recharge (RCHA) + tracer GWT.
+
+        RCHA carries a single ``tracer`` aux array; GWT SSM sources it. Mirrors
+        ``_build_minimal_sim`` but exercises the array-recharge aux path.
+        """
+        import flopy
+        sim = flopy.mf6.MFSimulation(
+            sim_name='test', sim_ws=str(sim_ws), exe_name='mf6'
+        )
+        flopy.mf6.ModflowTdis(sim, nper=1, perioddata=[(1.0, 1, 1.0)], time_units='days')
+
+        gwf = flopy.mf6.ModflowGwf(sim, modelname='gwf', save_flows=True)
+        ims_gwf = flopy.mf6.ModflowIms(sim, filename='gwf.ims')
+        sim.register_ims_package(ims_gwf, ['gwf'])
+
+        flopy.mf6.ModflowGwfdis(gwf, nlay=1, nrow=1, ncol=3,
+                                 delr=1.0, delc=1.0, top=0.0, botm=-1.0,
+                                 filename='gwf.dis')
+        flopy.mf6.ModflowGwfnpf(gwf, k=1.0, filename='gwf.npf')
+        flopy.mf6.ModflowGwfic(gwf, strt=1.0, filename='gwf.ic')
+        flopy.mf6.ModflowGwfchd(
+            gwf, stress_period_data=[[(0, 0, 2), 0.0]],
+            pname='chdout', filename='gwf.chdout.chd',
+        )
+        flopy.mf6.ModflowGwfrcha(
+            gwf, recharge=0.001, auxiliary=['tracer'], aux={0: 0.0},
+            pname='rcha', filename='gwf.rcha',
+        )
+        flopy.mf6.ModflowGwfoc(gwf, head_filerecord='gwf.hds',
+                                budget_filerecord='gwf.cbb',
+                                saverecord=[('HEAD', 'ALL'), ('BUDGET', 'ALL')])
+
+        gwt = flopy.mf6.ModflowGwt(sim, modelname='gwt')
+        ims_gwt = flopy.mf6.ModflowIms(
+            sim, linear_acceleration='BICGSTAB', filename='gwt.ims'
+        )
+        sim.register_ims_package(ims_gwt, ['gwt'])
+
+        flopy.mf6.ModflowGwtdis(gwt, nlay=1, nrow=1, ncol=3,
+                                  delr=1.0, delc=1.0, top=0.0, botm=-1.0,
+                                  filename='gwt.dis')
+        flopy.mf6.ModflowGwtic(gwt, strt=0.0, filename='gwt.ic')
+        flopy.mf6.ModflowGwtssm(
+            gwt, sources=[['rcha', 'aux', 'tracer']], filename='gwt.ssm'
+        )
+        flopy.mf6.ModflowGwtadv(gwt, scheme='UPSTREAM')
+        flopy.mf6.ModflowGwtmst(gwt, porosity=0.3, filename='gwt.mst')
+        flopy.mf6.ModflowGwtoc(gwt, budget_filerecord='gwt.cbc',
+                                 concentration_filerecord='gwt.ucn',
+                                 saverecord=[('CONCENTRATION', 'ALL')])
+        flopy.mf6.ModflowGwfgwt(sim, exgtype='GWF6-GWT6',
+                                  exgmnamea='gwf', exgmnameb='gwt',
+                                  filename='gwf-gwt.gwfgwt')
+        return sim
+
+    def test_rcha_aux_array_structure(self, tmp_path, benchmark_database):
+        """RCHA aux becomes per-component grid arrays filled with equilibrated concs."""
+        sim_ws = tmp_path / 'conservative'
+        sim_ws.mkdir()
+        sim = self._build_minimal_sim_rcha(sim_ws)
+
+        solutions = Solutions({'Ca': [1e-4, 1e-3], 'Cl': [2e-4, 2e-3]})
+        solutions.set_ic(1)
+
+        model = Mup3d.from_mf6(sim, solutions, name='test', gwt_name='gwt')
+        model.set_database(benchmark_database)
+        model.initialize()
+
+        components = model.components
+        assert len(components) > 0
+
+        rcha_cs = ChemStress('rcha', type='aux')
+        rcha_cs.set_spd([2])  # uniform: single source solution
+        model.set_chem_stress(rcha_cs)
+
+        model.write_simulation()
+
+        # Inspect the reactive GWF rcha package in the written simulation.
+        gwf = model._gwt_sim.get_model('gwf')
+        rcha = gwf.get_package('rcha')
+
+        # auxiliary names must be the components, not the original 'tracer'.
+        # After write_simulation, get_data() returns a recarray whose single row
+        # is ('auxiliary', comp0, comp1, ...); drop the leading tag field.
+        aux_row = np.atleast_1d(rcha.auxiliary.get_data()).tolist()[0]
+        aux_names = [str(c) for c in aux_row[1:]]
+        assert aux_names == list(components)
+
+        # aux is a per-component grid array (naux, nrow, ncol), uniform fill.
+        aux_arr = rcha.aux.get_data()[0]
+        assert aux_arr.shape == (len(components), 1, 3)
+        for j in range(len(components)):
+            assert np.allclose(aux_arr[j], aux_arr[j].flat[0])
+
+        # Each reactive GWT sources rcha via SSM AUX.
+        written = set(os.listdir(model.wd))
+        assert 'gwf.rcha' in written
+        for c in components:
+            assert f'{c}.ssm' in written, f'Missing SSM for {c}'
+
+    def test_rcha_multiple_solutions_raises(self, tmp_path, benchmark_database):
+        """RCHA ChemStress with >1 source solution raises (uniform chemistry only)."""
+        sim_ws = tmp_path / 'conservative'
+        sim_ws.mkdir()
+        sim = self._build_minimal_sim_rcha(sim_ws)
+
+        solutions = Solutions({'Ca': [1e-4, 1e-3], 'Cl': [2e-4, 2e-3]})
+        solutions.set_ic(1)
+
+        model = Mup3d.from_mf6(sim, solutions, name='test', gwt_name='gwt')
+        model.set_database(benchmark_database)
+        model.initialize()
+
+        rcha_cs = ChemStress('rcha', type='aux')
+        rcha_cs.set_spd([1, 2])  # more than one solution is invalid for rcha
+        model.set_chem_stress(rcha_cs)
+
+        with pytest.raises(ValueError, match="uniform chemistry"):
+            model.write_simulation()
+
+    @staticmethod
+    def _build_minimal_sim_disv(sim_ws, nper=1):
+        """Minimal flopy sim on a **DISV** grid: GWF + tracer GWT with CHD aux.
+
+        A hand-built 2x2 single-layer vertex grid (``ncpl=4``, ``nvert=9``) — no
+        gridgen dependency. The inflow CHD (``chdin``, cell2d 0) carries a
+        ``tracer`` aux for every stress period; ``chdout`` sits at cell2d 3. Mirrors
+        :meth:`_build_minimal_sim` but exercises the DISV grid-copy path in
+        ``_build_reactive_gwt_models``.
+        """
+        import flopy
+        vertices = [
+            [0, 0.0, 2.0], [1, 1.0, 2.0], [2, 2.0, 2.0],
+            [3, 0.0, 1.0], [4, 1.0, 1.0], [5, 2.0, 1.0],
+            [6, 0.0, 0.0], [7, 1.0, 0.0], [8, 2.0, 0.0],
+        ]
+        cell2d = [
+            [0, 0.5, 1.5, 4, 0, 1, 4, 3],
+            [1, 1.5, 1.5, 4, 1, 2, 5, 4],
+            [2, 0.5, 0.5, 4, 3, 4, 7, 6],
+            [3, 1.5, 0.5, 4, 4, 5, 8, 7],
+        ]
+        disv_kwargs = dict(nlay=1, ncpl=4, nvert=9, top=0.0, botm=-1.0,
+                           vertices=vertices, cell2d=cell2d)
+
+        sim = flopy.mf6.MFSimulation(
+            sim_name='test', sim_ws=str(sim_ws), exe_name='mf6'
+        )
+        flopy.mf6.ModflowTdis(sim, nper=nper,
+                              perioddata=[(1.0, 1, 1.0)] * nper,
+                              time_units='days')
+
+        gwf = flopy.mf6.ModflowGwf(sim, modelname='gwf', save_flows=True)
+        ims_gwf = flopy.mf6.ModflowIms(sim, filename='gwf.ims')
+        sim.register_ims_package(ims_gwf, ['gwf'])
+
+        flopy.mf6.ModflowGwfdisv(gwf, filename='gwf.disv', **disv_kwargs)
+        flopy.mf6.ModflowGwfnpf(gwf, k=1.0, filename='gwf.npf')
+        flopy.mf6.ModflowGwfic(gwf, strt=1.0, filename='gwf.ic')
+        chdin_spd = {k: [[(0, 0), 1.0, 1.0]] for k in range(nper)}
+        flopy.mf6.ModflowGwfchd(
+            gwf, stress_period_data=chdin_spd,
+            auxiliary=['tracer'], pname='chdin', filename='gwf.chdin.chd',
+        )
+        flopy.mf6.ModflowGwfchd(
+            gwf, stress_period_data=[[(0, 3), 0.0]],
+            pname='chdout', filename='gwf.chdout.chd',
+        )
+        flopy.mf6.ModflowGwfoc(gwf, head_filerecord='gwf.hds',
+                                budget_filerecord='gwf.cbb',
+                                saverecord=[('HEAD', 'ALL'), ('BUDGET', 'ALL')])
+
+        gwt = flopy.mf6.ModflowGwt(sim, modelname='gwt')
+        ims_gwt = flopy.mf6.ModflowIms(
+            sim, linear_acceleration='BICGSTAB', filename='gwt.ims'
+        )
+        sim.register_ims_package(ims_gwt, ['gwt'])
+
+        flopy.mf6.ModflowGwtdisv(gwt, filename='gwt.disv', **disv_kwargs)
+        flopy.mf6.ModflowGwtic(gwt, strt=0.0, filename='gwt.ic')
+        flopy.mf6.ModflowGwtssm(
+            gwt, sources=[['chdin', 'aux', 'tracer']], filename='gwt.ssm'
+        )
+        flopy.mf6.ModflowGwtadv(gwt, scheme='UPSTREAM')
+        flopy.mf6.ModflowGwtmst(gwt, porosity=0.3, filename='gwt.mst')
+        flopy.mf6.ModflowGwtoc(gwt, budget_filerecord='gwt.cbc',
+                                 concentration_filerecord='gwt.ucn',
+                                 saverecord=[('CONCENTRATION', 'ALL')])
+        flopy.mf6.ModflowGwfgwt(sim, exgtype='GWF6-GWT6',
+                                  exgmnamea='gwf', exgmnameb='gwt',
+                                  filename='gwf-gwt.gwfgwt')
+        return sim
+
+    def test_from_mf6_disv_write_simulation(self, tmp_path, benchmark_database):
+        """from_mf6 on a DISV grid writes reactive GWTs with a DISV package.
+
+        Regression for the grid-type dispatch bug in ``_build_reactive_gwt_models``:
+        it used ``gwf.get_package('dis')`` to detect the grid, but flopy prefix-
+        matches ``'dis'`` to ``'disv'``, so a DISV model wrongly took the DIS branch
+        and crashed with ``AttributeError: ... has no attribute 'nrow'`` at
+        ``write_simulation``. The fix detects the grid via ``get_grid_type().name``.
+        This asserts DISV survives write_simulation and every cloned reactive GWT
+        carries a DISV package with the grid copied through.
+        """
+        sim_ws = tmp_path / 'disv'
+        sim_ws.mkdir()
+        sim = self._build_minimal_sim_disv(sim_ws)
+
+        # two solutions so the aux ChemStress can map to solution 2
+        solutions = Solutions({'Ca': [1e-4, 1e-3], 'Cl': [2e-4, 2e-3]})
+        solutions.set_ic(1)
+
+        model = Mup3d.from_mf6(sim, solutions, name='test', gwt_name='gwt')
+        model.set_database(benchmark_database)
+        model.initialize()
+
+        chdin_cs = ChemStress('chdin', type='aux')
+        chdin_cs.set_spd([2])
+        model.set_chem_stress(chdin_cs)
+
+        # pre-fix this raised AttributeError about 'nrow' on the DISV grid
+        model.write_simulation()
+
+        components = model.components
+        assert len(components) > 0
+
+        # tracer template GWT must be gone
+        written = set(os.listdir(model.wd))
+        tracer_files = [f for f in written
+                        if f.startswith('gwt.') and not f.endswith('.ims')]
+        assert len(tracer_files) == 0, f'Tracer model files remain: {tracer_files}'
+
+        # every reactive GWT is DISV with the grid copied through (ncpl == 4)
+        for c in components:
+            gwt_model = model._gwt_sim.get_model(c)
+            assert gwt_model.get_grid_type().name == 'DISV', \
+                f'{c} GWT is not DISV'
+            assert int(gwt_model.disv.ncpl.get_data()) == 4, \
+                f'{c} DISV ncpl not copied'
 

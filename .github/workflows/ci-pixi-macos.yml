@@ -1,4 +1,4 @@
-name: mf6rtm continuous integration - macOS
+name: mf6rtm CI - macOS
 
 on:
   schedule:

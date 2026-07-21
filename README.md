@@ -1,13 +1,25 @@
-# MF6RTM: Reactive Transport Model via the MODFLOW 6 and PHREEQCRM APIs
-![Tests](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml/badge.svg)
-![Tests](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi-macos.yml/badge.svg)
-[![Coverage Status](https://coveralls.io/repos/github/p-ortega/mf6rtm/badge.svg?branch=develop)](https://coveralls.io/github/p-ortega/mf6rtm?branch=main)
+
+# MODFLOW 6 and PHREEQC Reactive Transport Modeling
+
+<img align="center" height="150" alt="mf6rtm logo" src="https://raw.githubusercontent.com/p-ortega/mf6rtm/main/mf6rtm/assets/mf6rtm.png">
+
+**Main branch:**
+[![CI Linux](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml/badge.svg?branch=main)](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml)
+[![CI macOS](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi-macos.yml/badge.svg?branch=main)](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi-macos.yml)
+[![Coverage Status](https://coveralls.io/repos/github/p-ortega/mf6rtm/badge.svg?branch=main)](https://coveralls.io/github/p-ortega/mf6rtm?branch=main)
+[![Docs](https://github.com/p-ortega/mf6rtm/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/p-ortega/mf6rtm/actions/workflows/docs.yml)
+
+**Develop branch:**
+[![CI Linux](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml/badge.svg?branch=develop)](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml)
+[![CI macOS](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi-macos.yml/badge.svg?branch=develop)](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi-macos.yml)
+[![Coverage Status](https://coveralls.io/repos/github/p-ortega/mf6rtm/badge.svg?branch=develop)](https://coveralls.io/github/p-ortega/mf6rtm?branch=develop)
+[![Docs](https://github.com/p-ortega/mf6rtm/actions/workflows/docs.yml/badge.svg?branch=develop)](https://github.com/p-ortega/mf6rtm/actions/workflows/docs.yml)
+
 [![PyPI License](https://img.shields.io/pypi/l/mf6rtm)](https://pypi.python.org/pypi/mf6rtm)
-<!-- [![PyPI Status](https://img.shields.io/pypi/status/mf6rtm.png)](https://pypi.python.org/pypi/mf6rtm) -->
-<!-- [![PyPI Format](https://img.shields.io/pypi/format/mf6rtm)](https://pypi.python.org/pypi/mf6rtm) -->
 [![PyPI Version](https://img.shields.io/pypi/v/mf6rtm.png)](https://pypi.python.org/pypi/mf6rtm)
 [![PyPI Versions](https://img.shields.io/pypi/pyversions/mf6rtm.png)](https://pypi.python.org/pypi/mf6rtm)
-[![DOI](https://zenodo.org/badge/798559356.svg)](https://doi.org/10.5281/zenodo.18396979)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17118951.svg)](https://doi.org/10.5281/zenodo.17118951)
+![Platforms](https://img.shields.io/badge/platforms-linux%20%7C%20macOS%20%7C%20windows-blue)
 
 ## Benchmarks
 Benchmark comparing model results against PHT3D are in `benchmark/`. Each folder contains a Jupyter notebook to write and execute an MF6RTM model via the MUP3D class. Additionally, PHT3D files are provided in the corresponding `pht3d` directory for each example.
@@ -38,16 +50,9 @@ The package can be installed via pip:
 pip install mf6rtm
 ```
 
-### Manual Installation with Conda/Mamba
+### Installing MODFLOW 6 executables
 
-If you prefer conda/mamba, create a dedicated environment:
-
-```commandline
-mamba env create -f env.yml
-mamba activate mf6rtm-dev
-```
-
-After activating the environment, install the MODFLOW6 executables:
+After installing mf6rtm, install the MODFLOW 6 executables:
 
 ```commandline
 pip install modflow-devtools
@@ -70,9 +75,9 @@ We have provided some benchmarks in the form of Jupyter notebooks. We have also 
 
 ## Developing
 
-### With Pixi (Recommended)
+### With Pixi
 
-For development, we recommend using pixi for fast, reproducible environments:
+For development, we use pixi for fast, reproducible environments:
 
 ```commandline
 # Fork and clone the repository
@@ -93,26 +98,10 @@ pixi run lint
 
 # Test with specific Python version
 pixi run -e py311 test
-
 ```
+## Documentation
 
-### With Conda/Mamba
-
-Alternatively, use conda/mamba with the provided environment file:
-
-```commandline
-# Install environment
-conda env create -f env.yml
-conda activate mf6rtm-dev
-
-# Install development dependencies
-pip install -r requirements_dev.txt
-```
-
-The development dependencies for testing are located in `requirements_dev.txt`. We have also provided dependencies with flopy and pyemu inside the repo but feel free to use your own distribution.
+The documentation is available in [mf6rtm - read the docs](https://mf6rtm.readthedocs.io)
 
 ## Funding
-The developing of mf6rtm was kindly funded and supported by [Intera, Inc](https://www.intera.com).
-
-## Authors
-Pablo Ortega (Portega)
+The developing of mf6rtm was kindly supported by [INTERA, Inc](https://www.intera.com).
