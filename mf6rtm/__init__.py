@@ -7,7 +7,7 @@ import warnings
 warnings.filterwarnings("ignore", message="builtin type.*has no __module__", category=DeprecationWarning)
 
 __author__ = "Pablo Ortega"
-__version__ = "0.3.1+develop"
+__version__ = "0.5.0.dev0"
 
 from . import mup3d
 from . import simulation

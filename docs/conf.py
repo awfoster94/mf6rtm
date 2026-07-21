@@ -15,7 +15,8 @@ project = 'mf6rtm'
 copyright = f'{datetime.now().year}, Pablo Ortega'
 # year = datetime.now().year
 author = 'Pablo Ortega, Anthony Aufdenkampe and others'
-# release = '0.2.0'
+from mf6rtm import __version__ as release  # noqa: E402
+version = release
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
