@@ -3,17 +3,9 @@
 
 <img align="left" height="120" alt="mf6rtm logo" src="https://raw.githubusercontent.com/p-ortega/mf6rtm/main/mf6rtm/assets/mf6rtm.png">
 
-**Main branch:**
-[![CI Linux](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml/badge.svg?branch=main)](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml)
-[![CI macOS](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi-macos.yml/badge.svg?branch=main)](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi-macos.yml)
-[![Coverage Status](https://coveralls.io/repos/github/p-ortega/mf6rtm/badge.svg?branch=main)](https://coveralls.io/github/p-ortega/mf6rtm?branch=main)
-[![Docs](https://github.com/p-ortega/mf6rtm/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/p-ortega/mf6rtm/actions/workflows/docs.yml)
+**Main branch:** [![CI Linux](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml/badge.svg?branch=main)](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml) [![CI macOS](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi-macos.yml/badge.svg?branch=main)](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi-macos.yml) [![Coverage Status](https://coveralls.io/repos/github/p-ortega/mf6rtm/badge.svg?branch=main)](https://coveralls.io/github/p-ortega/mf6rtm?branch=main) [![Docs](https://github.com/p-ortega/mf6rtm/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/p-ortega/mf6rtm/actions/workflows/docs.yml)
 
-**Develop branch:**
-[![CI Linux](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml/badge.svg?branch=develop)](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml)
-[![CI macOS](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi-macos.yml/badge.svg?branch=develop)](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi-macos.yml)
-[![Coverage Status](https://coveralls.io/repos/github/p-ortega/mf6rtm/badge.svg?branch=develop)](https://coveralls.io/github/p-ortega/mf6rtm?branch=develop)
-[![Docs](https://github.com/p-ortega/mf6rtm/actions/workflows/docs.yml/badge.svg?branch=develop)](https://github.com/p-ortega/mf6rtm/actions/workflows/docs.yml)
+**Develop branch:** [![CI Linux](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml/badge.svg?branch=develop)](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml) [![CI macOS](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi-macos.yml/badge.svg?branch=develop)](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi-macos.yml) [![Coverage Status](https://coveralls.io/repos/github/p-ortega/mf6rtm/badge.svg?branch=develop)](https://coveralls.io/github/p-ortega/mf6rtm?branch=develop) [![Docs](https://github.com/p-ortega/mf6rtm/actions/workflows/docs.yml/badge.svg?branch=develop)](https://github.com/p-ortega/mf6rtm/actions/workflows/docs.yml)
 
 [![PyPI License](https://img.shields.io/pypi/l/mf6rtm)](https://pypi.python.org/pypi/mf6rtm)
 [![PyPI Version](https://img.shields.io/pypi/v/mf6rtm.png)](https://pypi.python.org/pypi/mf6rtm)
