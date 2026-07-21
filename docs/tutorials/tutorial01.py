@@ -171,7 +171,7 @@ eqp_df
 # %%
 model = mup3d.Mup3d.from_mf6(sim, solution, name="quickstart", gwt_name="gwt")
 model.set_wd(sim_ws)
-model.set_database(os.path.join(DATA, "pht3d_datab.dat"))
+model.set_database(os.path.join(DATA, "tut01_datab.dat"))
 model.set_equilibrium_phases(equilibrium_phases)
 model.set_postfix(os.path.join(DATA, "tut01_postfix.phqr"))
 model.initialize()
