@@ -1,9 +1,7 @@
 
 # MODFLOW 6 and PHREEQC Reactive Transport Modeling
 
-<!-- <img align="center" height="200" alt="mf6rtm logo" src="https://raw.githubusercontent.com/p-ortega/mf6rtm/dev/mf6rtm/assets/mf6rtm.png"> -->
-
-<img align="left" height="200" alt="mf6rtm logo" src="./mf6rtm/assets/mf6rtm.png">
+<img align="center" height="150" alt="mf6rtm logo" src="https://raw.githubusercontent.com/p-ortega/mf6rtm/main/mf6rtm/assets/mf6rtm.png">
 
 **Main branch:**
 [![CI Linux](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml/badge.svg?branch=main)](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml)
@@ -101,6 +99,9 @@ pixi run lint
 # Test with specific Python version
 pixi run -e py311 test
 ```
+## Documentation
+
+The documentation is available in [mf6rtm - read the docs](https://mf6rtm.readthedocs.io)
 
 ## Funding
 The developing of mf6rtm was kindly supported by [INTERA, Inc](https://www.intera.com).
