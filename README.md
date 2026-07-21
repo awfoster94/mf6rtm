@@ -1,13 +1,27 @@
-# MF6RTM: MODFLOW 6 and PHREEQC Reactive Transport Modeling
 
-![Tests](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml/badge.svg)
-![Tests](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi-macos.yml/badge.svg)
-![Tests](https://github.com/p-ortega/mf6rtm/actions/workflows/docs.yml/badge.svg)
-[![Coverage Status](https://coveralls.io/repos/github/p-ortega/mf6rtm/badge.svg?branch=develop)](https://coveralls.io/github/p-ortega/mf6rtm?branch=main)
+# MODFLOW 6 and PHREEQC Reactive Transport Modeling
+
+<!-- <img align="center" height="200" alt="mf6rtm logo" src="https://raw.githubusercontent.com/p-ortega/mf6rtm/dev/mf6rtm/assets/mf6rtm.png"> -->
+
+<img align="left" height="200" alt="mf6rtm logo" src="./mf6rtm/assets/mf6rtm.png">
+
+**Main branch:**
+[![CI Linux](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml/badge.svg?branch=main)](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml)
+[![CI macOS](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi-macos.yml/badge.svg?branch=main)](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi-macos.yml)
+[![Coverage Status](https://coveralls.io/repos/github/p-ortega/mf6rtm/badge.svg?branch=main)](https://coveralls.io/github/p-ortega/mf6rtm?branch=main)
+[![Docs](https://github.com/p-ortega/mf6rtm/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/p-ortega/mf6rtm/actions/workflows/docs.yml)
+
+**Develop branch:**
+[![CI Linux](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml/badge.svg?branch=develop)](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml)
+[![CI macOS](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi-macos.yml/badge.svg?branch=develop)](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi-macos.yml)
+[![Coverage Status](https://coveralls.io/repos/github/p-ortega/mf6rtm/badge.svg?branch=develop)](https://coveralls.io/github/p-ortega/mf6rtm?branch=develop)
+[![Docs](https://github.com/p-ortega/mf6rtm/actions/workflows/docs.yml/badge.svg?branch=develop)](https://github.com/p-ortega/mf6rtm/actions/workflows/docs.yml)
+
 [![PyPI License](https://img.shields.io/pypi/l/mf6rtm)](https://pypi.python.org/pypi/mf6rtm)
 [![PyPI Version](https://img.shields.io/pypi/v/mf6rtm.png)](https://pypi.python.org/pypi/mf6rtm)
 [![PyPI Versions](https://img.shields.io/pypi/pyversions/mf6rtm.png)](https://pypi.python.org/pypi/mf6rtm)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17118951.svg)](https://doi.org/10.5281/zenodo.17118951)
+![Platforms](https://img.shields.io/badge/platforms-linux%20%7C%20macOS%20%7C%20windows-blue)
 
 ## Benchmarks
 Benchmark comparing model results against PHT3D are in `benchmark/`. Each folder contains a Jupyter notebook to write and execute an MF6RTM model via the MUP3D class. Additionally, PHT3D files are provided in the corresponding `pht3d` directory for each example.
@@ -89,7 +103,4 @@ pixi run -e py311 test
 ```
 
 ## Funding
-The developing of mf6rtm was kindly funded and supported by [Intera, Inc](https://www.intera.com).
-
-## Authors
-Pablo Ortega (Portega)
+The developing of mf6rtm was kindly supported by [INTERA, Inc](https://www.intera.com).

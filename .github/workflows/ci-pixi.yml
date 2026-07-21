@@ -1,4 +1,4 @@
-name: mf6rtm continuous integration
+name: mf6rtm CI
 
 on:
   schedule:
