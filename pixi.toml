@@ -52,12 +52,21 @@ furo = "*"
 sphinx-autodoc-typehints = "*"
 pyshp = "*"
 
+[feature.release.dependencies]
+bump-my-version = "*"
+
+[feature.release.tasks]
+# release finalize: 0.5.0.dev0 -> 0.5.0 ; next cycle: bump minor -> 0.6.0.dev0
+bump = "bump-my-version bump"
+version = "bump-my-version show current_version"
+
 [environments]
 py310 = { features = ["py310", "modflow"], solve-group = "py310" }
 py311 = { features = ["py311", "modflow"], solve-group = "py311" }
 py312 = { features = ["py312", "modflow"], solve-group = "py312" }
 py313 = { features = ["py313", "modflow"], solve-group = "py313" }
 docs = { features = ["docs", "py313", "modflow"], solve-group = "py313" }
+release = { features = ["release"] }
 
 [tasks]
 install-package = { cmd = "pip install -e ." }
