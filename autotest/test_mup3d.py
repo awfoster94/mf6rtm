@@ -1113,3 +1113,123 @@ class TestFromMf6:
         with pytest.raises(ValueError, match="uniform chemistry"):
             model.write_simulation()
 
+    @staticmethod
+    def _build_minimal_sim_disv(sim_ws, nper=1):
+        """Minimal flopy sim on a **DISV** grid: GWF + tracer GWT with CHD aux.
+
+        A hand-built 2x2 single-layer vertex grid (``ncpl=4``, ``nvert=9``) — no
+        gridgen dependency. The inflow CHD (``chdin``, cell2d 0) carries a
+        ``tracer`` aux for every stress period; ``chdout`` sits at cell2d 3. Mirrors
+        :meth:`_build_minimal_sim` but exercises the DISV grid-copy path in
+        ``_build_reactive_gwt_models``.
+        """
+        import flopy
+        vertices = [
+            [0, 0.0, 2.0], [1, 1.0, 2.0], [2, 2.0, 2.0],
+            [3, 0.0, 1.0], [4, 1.0, 1.0], [5, 2.0, 1.0],
+            [6, 0.0, 0.0], [7, 1.0, 0.0], [8, 2.0, 0.0],
+        ]
+        cell2d = [
+            [0, 0.5, 1.5, 4, 0, 1, 4, 3],
+            [1, 1.5, 1.5, 4, 1, 2, 5, 4],
+            [2, 0.5, 0.5, 4, 3, 4, 7, 6],
+            [3, 1.5, 0.5, 4, 4, 5, 8, 7],
+        ]
+        disv_kwargs = dict(nlay=1, ncpl=4, nvert=9, top=0.0, botm=-1.0,
+                           vertices=vertices, cell2d=cell2d)
+
+        sim = flopy.mf6.MFSimulation(
+            sim_name='test', sim_ws=str(sim_ws), exe_name='mf6'
+        )
+        flopy.mf6.ModflowTdis(sim, nper=nper,
+                              perioddata=[(1.0, 1, 1.0)] * nper,
+                              time_units='days')
+
+        gwf = flopy.mf6.ModflowGwf(sim, modelname='gwf', save_flows=True)
+        ims_gwf = flopy.mf6.ModflowIms(sim, filename='gwf.ims')
+        sim.register_ims_package(ims_gwf, ['gwf'])
+
+        flopy.mf6.ModflowGwfdisv(gwf, filename='gwf.disv', **disv_kwargs)
+        flopy.mf6.ModflowGwfnpf(gwf, k=1.0, filename='gwf.npf')
+        flopy.mf6.ModflowGwfic(gwf, strt=1.0, filename='gwf.ic')
+        chdin_spd = {k: [[(0, 0), 1.0, 1.0]] for k in range(nper)}
+        flopy.mf6.ModflowGwfchd(
+            gwf, stress_period_data=chdin_spd,
+            auxiliary=['tracer'], pname='chdin', filename='gwf.chdin.chd',
+        )
+        flopy.mf6.ModflowGwfchd(
+            gwf, stress_period_data=[[(0, 3), 0.0]],
+            pname='chdout', filename='gwf.chdout.chd',
+        )
+        flopy.mf6.ModflowGwfoc(gwf, head_filerecord='gwf.hds',
+                                budget_filerecord='gwf.cbb',
+                                saverecord=[('HEAD', 'ALL'), ('BUDGET', 'ALL')])
+
+        gwt = flopy.mf6.ModflowGwt(sim, modelname='gwt')
+        ims_gwt = flopy.mf6.ModflowIms(
+            sim, linear_acceleration='BICGSTAB', filename='gwt.ims'
+        )
+        sim.register_ims_package(ims_gwt, ['gwt'])
+
+        flopy.mf6.ModflowGwtdisv(gwt, filename='gwt.disv', **disv_kwargs)
+        flopy.mf6.ModflowGwtic(gwt, strt=0.0, filename='gwt.ic')
+        flopy.mf6.ModflowGwtssm(
+            gwt, sources=[['chdin', 'aux', 'tracer']], filename='gwt.ssm'
+        )
+        flopy.mf6.ModflowGwtadv(gwt, scheme='UPSTREAM')
+        flopy.mf6.ModflowGwtmst(gwt, porosity=0.3, filename='gwt.mst')
+        flopy.mf6.ModflowGwtoc(gwt, budget_filerecord='gwt.cbc',
+                                 concentration_filerecord='gwt.ucn',
+                                 saverecord=[('CONCENTRATION', 'ALL')])
+        flopy.mf6.ModflowGwfgwt(sim, exgtype='GWF6-GWT6',
+                                  exgmnamea='gwf', exgmnameb='gwt',
+                                  filename='gwf-gwt.gwfgwt')
+        return sim
+
+    def test_from_mf6_disv_write_simulation(self, tmp_path, benchmark_database):
+        """from_mf6 on a DISV grid writes reactive GWTs with a DISV package.
+
+        Regression for the grid-type dispatch bug in ``_build_reactive_gwt_models``:
+        it used ``gwf.get_package('dis')`` to detect the grid, but flopy prefix-
+        matches ``'dis'`` to ``'disv'``, so a DISV model wrongly took the DIS branch
+        and crashed with ``AttributeError: ... has no attribute 'nrow'`` at
+        ``write_simulation``. The fix detects the grid via ``get_grid_type().name``.
+        This asserts DISV survives write_simulation and every cloned reactive GWT
+        carries a DISV package with the grid copied through.
+        """
+        sim_ws = tmp_path / 'disv'
+        sim_ws.mkdir()
+        sim = self._build_minimal_sim_disv(sim_ws)
+
+        # two solutions so the aux ChemStress can map to solution 2
+        solutions = Solutions({'Ca': [1e-4, 1e-3], 'Cl': [2e-4, 2e-3]})
+        solutions.set_ic(1)
+
+        model = Mup3d.from_mf6(sim, solutions, name='test', gwt_name='gwt')
+        model.set_database(benchmark_database)
+        model.initialize()
+
+        chdin_cs = ChemStress('chdin', type='aux')
+        chdin_cs.set_spd([2])
+        model.set_chem_stress(chdin_cs)
+
+        # pre-fix this raised AttributeError about 'nrow' on the DISV grid
+        model.write_simulation()
+
+        components = model.components
+        assert len(components) > 0
+
+        # tracer template GWT must be gone
+        written = set(os.listdir(model.wd))
+        tracer_files = [f for f in written
+                        if f.startswith('gwt.') and not f.endswith('.ims')]
+        assert len(tracer_files) == 0, f'Tracer model files remain: {tracer_files}'
+
+        # every reactive GWT is DISV with the grid copied through (ncpl == 4)
+        for c in components:
+            gwt_model = model._gwt_sim.get_model(c)
+            assert gwt_model.get_grid_type().name == 'DISV', \
+                f'{c} GWT is not DISV'
+            assert int(gwt_model.disv.ncpl.get_data()) == 4, \
+                f'{c} DISV ncpl not copied'
+
