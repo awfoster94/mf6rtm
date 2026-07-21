@@ -1,7 +1,7 @@
 
 # MODFLOW 6 and PHREEQC Reactive Transport Modeling
 
-<img align="left" height="120" alt="mf6rtm logo" src="https://raw.githubusercontent.com/p-ortega/mf6rtm/main/mf6rtm/assets/mf6rtm.png">
+<img align="left" height="200" alt="mf6rtm logo" src="https://raw.githubusercontent.com/p-ortega/mf6rtm/main/mf6rtm/assets/mf6rtm.png">
 
 **Main branch:** [![CI Linux](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml/badge.svg?branch=main)](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi.yml) [![CI macOS](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi-macos.yml/badge.svg?branch=main)](https://github.com/p-ortega/mf6rtm/actions/workflows/ci-pixi-macos.yml) [![Coverage Status](https://coveralls.io/repos/github/p-ortega/mf6rtm/badge.svg?branch=main)](https://coveralls.io/github/p-ortega/mf6rtm?branch=main) [![Docs](https://github.com/p-ortega/mf6rtm/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/p-ortega/mf6rtm/actions/workflows/docs.yml)
 

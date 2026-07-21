@@ -1,4 +1,4 @@
-name: mf6rtm - documentation
+name: docs
 
 on:
   push:
