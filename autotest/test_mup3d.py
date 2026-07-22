@@ -879,6 +879,30 @@ class TestFromMf6:
                                   filename='gwf-gwt.gwfgwt')
         return sim
 
+    def test_tracer_component_name_collision_raises(self, tmp_path):
+        """A tracer GWT named after a PHREEQC component fails loudly.
+
+        from_mf6() clones the tracer into one GWT per component; if the tracer
+        name is also a component name the clone collides and flopy fails with an
+        opaque solutiongroup error. The guard turns that into a clear ValueError.
+        No MF6 run or database required — the guard fires before any sim access.
+        """
+        sim_ws = tmp_path / 'collision'
+        sim_ws.mkdir()
+        sim = self._build_minimal_sim(sim_ws)
+
+        solutions = Solutions({'Ca': [1e-4, 1e-3], 'Cl': [2e-4, 2e-3]})
+        solutions.set_ic(1)
+
+        model = Mup3d.from_mf6(sim, solutions, name='test', gwt_name='gwt')
+        # Force the collision: the tracer GWT is named 'gwt', which is also a
+        # (pretend) PHREEQC component. Normally self.components is set by
+        # initialize(); set it directly to isolate the guard.
+        model.components = ['gwt', 'Ca', 'Cl']
+
+        with pytest.raises(ValueError, match="collides with a"):
+            model._build_reactive_gwt_models()
+
     def test_aux_and_cnc_file_structure(self, tmp_path, benchmark_database):
         """write_simulation writes per-component CNC files and removes tracer GWT."""
         sim_ws = tmp_path / 'conservative'
