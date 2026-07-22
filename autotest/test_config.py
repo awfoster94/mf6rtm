@@ -150,6 +150,45 @@ class TestMF6RTMConfigOutputSection:
         assert reloaded.output['output_format'] == 'hdf5'
 
 
+class TestMF6RTMConfigFlatKwargFolding:
+    """Flat ``<section>_<key>`` kwargs (the form set_config uses) must fold into
+    the nested section dict the runtime reads, otherwise the flat value is
+    serialized to TOML while the nested dict keeps its default, and the two
+    diverge (regression that silently disabled externalio phase-block export)."""
+
+    def test_reactive_externalio_flat_kwarg_folds(self):
+        """set_config(reactive_externalio=True) sets reactive['externalio']."""
+        cfg = MF6RTMConfig(reactive_externalio=True)
+        assert cfg.reactive['externalio'] is True
+
+    def test_flat_and_nested_agree_after_folding(self):
+        """The folded value is the single source of truth (no stale flat attr)."""
+        cfg = MF6RTMConfig(reactive_externalio=True)
+        # to_dict must emit the folded value, not a default
+        assert cfg.to_dict()['reactive']['externalio'] is True
+        # and there is no divergent flat attribute left behind
+        assert not hasattr(cfg, 'reactive_externalio')
+
+    def test_flat_kwarg_survives_toml_round_trip(self, tmp_path):
+        cfg = MF6RTMConfig(reactive_externalio=True, reactive_timing='all')
+        fp = tmp_path / "mf6rtm.toml"
+        cfg.save_to_file(str(fp))
+        reloaded = MF6RTMConfig.from_toml_file(str(fp))
+        assert reloaded.reactive['externalio'] is True
+
+    def test_emulator_flat_kwargs_fold(self):
+        cfg = MF6RTMConfig(emulator_training_data=True,
+                           emulator_target_variables=['a', 'b'])
+        assert cfg.emulator['training_data'] is True
+        assert cfg.emulator['target_variables'] == ['a', 'b']
+
+    def test_nested_section_kwarg_still_supported(self):
+        """Passing a whole nested section dict (from_dict's form) still works."""
+        cfg = MF6RTMConfig(reactive={'timing': 'user', 'tsteps': [(1, 1)]})
+        assert cfg.reactive['timing'] == 'user'
+        assert cfg.reactive['externalio'] is False  # default filled in
+
+
 class TestMF6RTMConfigFromTomlErrors:
     """Tests for from_toml_file error handling."""
 

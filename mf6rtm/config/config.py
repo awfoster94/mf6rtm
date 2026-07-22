@@ -39,13 +39,36 @@ class MF6RTMConfig:
     tsteps : List[Tuple[int, int]]
         List of time steps for reaction calculations.
     """
+    # Config sections whose kwargs use the flat convention folded
+    _SECTION_PREFIXES = ("reactive_", "emulator_", "output_", "solver_")
+
     def __init__(self, **kwargs):
         """Basic initialization."""
         # Minimal initialization
         for key, value in kwargs.items():
-            setattr(self, key, value)
+            self._ingest_kwarg(key, value)
         # Apply defaults for any missing attributes
         self._apply_defaults()
+
+    def _ingest_kwarg(self, key, value):
+        """Store a configuration kwarg.
+
+        A ``<section>_<key>`` kwarg (e.g. ``reactive_externalio``) is folded into
+        the nested section dict (``self.reactive['externalio']``) so the flat form
+        accepted by ``set_config`` and the nested dicts the runtime reads never
+        diverge.
+        """
+        for prefix in self._SECTION_PREFIXES:
+            if key.startswith(prefix):
+                section = prefix.rstrip("_")
+                subkey = key[len(prefix):]
+                sec = getattr(self, section, None)
+                if not isinstance(sec, dict):
+                    sec = {}
+                    setattr(self, section, sec)
+                sec[subkey] = value
+                return
+        setattr(self, key, value)
 
     def _validate_config(self):
         self._validate_reaction_timing()
@@ -113,7 +136,7 @@ class MF6RTMConfig:
             Configuration parameters to set as attributes on the instance.
         """
         for key, value in kwargs.items():
-            setattr(self, key, value)
+            self._ingest_kwarg(key, value)
         # Update internal schema if needed
         self._update_schema_for_new_attrs(kwargs.keys())
 
