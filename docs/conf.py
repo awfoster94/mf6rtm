@@ -32,7 +32,12 @@ extensions = [
     "sphinx_autodoc_typehints",        # types from function annotations
     "myst_nb",                         # Markdown + notebook support
     "sphinx.ext.autosummary",
+    "sphinxext.opengraph",             # OpenGraph meta tags (SEO / social cards)
 ]
+
+# -- OpenGraph ----------------------------------------------------------
+ogp_site_url = "https://mf6rtm.readthedocs.io/en/stable/"
+ogp_description_length = 200
 
 # Auto-generate summary tables for modules
 autosummary_generate = True
@@ -55,7 +60,7 @@ if on_rtd:
 html_theme = "furo"
 html_static_path = ["_static"]
 html_logo = "../mf6rtm/assets/mf6rtm.png"
-html_title = "mf6rtm"
+html_title = "mf6rtm — Reactive Transport Modeling with MODFLOW 6 and PHREEQC"
 
 html_theme_options = {
     "navigation_with_keys": True,      # navigate with keyboard
