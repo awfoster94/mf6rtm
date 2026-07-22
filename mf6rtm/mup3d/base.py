@@ -1614,10 +1614,6 @@ class Mup3d(object):
         """
         yamlfile = self.phreeqcyaml_file
         phreeqcrm_from_yaml = phreeqcrm.InitializeYAML(yamlfile)
-        if phreeqcrm_from_yaml is None:
-            raise RuntimeError(
-                f"PhreeqcRM InitializeYAML failed for '{yamlfile}'."
-            )
         if self.phreeqc_rm is None:
             self.phreeqc_rm = phreeqcrm_from_yaml
         return
