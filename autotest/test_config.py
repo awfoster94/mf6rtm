@@ -61,6 +61,29 @@ class TestMF6RTMConfigSolverSection:
             raw = toml.load(f)
         assert 'solver' not in raw
 
+    def test_threshold_flat_kwarg_folds(self):
+        """solver_threshold flat kwarg lands in the nested solver dict."""
+        cfg = MF6RTMConfig(solver_threshold=1e-8)
+        assert cfg.solver['threshold'] == pytest.approx(1e-8)
+
+    def test_threshold_round_trip_via_toml(self, tmp_path):
+        """Saving and reloading a config preserves solver threshold."""
+        cfg = MF6RTMConfig(solver_threshold=1e-8)
+        filepath = tmp_path / "mf6rtm.toml"
+        cfg.save_to_file(str(filepath))
+
+        reloaded = MF6RTMConfig.from_toml_file(str(filepath))
+        assert reloaded.solver['threshold'] == pytest.approx(1e-8)
+
+    def test_threshold_absent_by_default_after_round_trip(self, tmp_path):
+        """Unset threshold stays absent through the round-trip (solver default applies)."""
+        cfg = MF6RTMConfig()
+        filepath = tmp_path / "mf6rtm.toml"
+        cfg.save_to_file(str(filepath))
+
+        reloaded = MF6RTMConfig.from_toml_file(str(filepath))
+        assert 'threshold' not in reloaded.solver
+
 
 class TestMF6RTMConfigStr:
     """Tests for MF6RTMConfig.__str__ output."""

@@ -238,24 +238,15 @@ class MF6RTMConfig:
         """
 
         result = {}
-        category_prefixes = ['reactive_', 'emulator_']  # generalized prefixes
-        category_groups = {prefix.rstrip('_'): {} for prefix in category_prefixes}
 
         for attr_name, value in self.__dict__.items():
             if attr_name.startswith('_'):
                 continue
-            # Handle category prefixes
-            handled = False
-            for prefix in category_prefixes:
-                if attr_name.startswith(prefix):
-                    key = attr_name[len(prefix):]
-                    category_groups[prefix.rstrip('_')][key] = value
-                    handled = True
-                    break
-            if handled:
-                continue
 
-            # Handle nested phase attributes
+            # Nested phase attributes (e.g. "equilibrium_phases_si_Calcite").
+            # Section kwargs (reactive/emulator/output/solver) are stored as
+            # nested dicts by _ingest_kwarg and serialized by the dict branch
+            # below, so no flat "<section>_<key>" handling is needed here.
             if '_' in attr_name:
                 parts = attr_name.split('_')
                 if len(parts) >= 3 and parts[0] in ['equilibrium', 'kinetic', 'exchange'] and parts[-1] not in ['names']:
@@ -273,27 +264,21 @@ class MF6RTMConfig:
                         result[main_group] = {}
                     result[main_group]['names'] = value
                 else:
-                    print(attr_name, value)
                     result[attr_name] = value
             else:
                 if isinstance(value, dict):
-                    # TOML has no null type — omit None-valued keys
+                    # TOML has no null type - omit None-valued keys
                     filtered = {k: v for k, v in value.items() if v is not None}
                     if filtered:
                         result[attr_name] = filtered
                 else:
                     result[attr_name] = value
 
-        # Add category groups to result if not empty
-        for category, group_dict in category_groups.items():
-            if group_dict:
-                result[category] = group_dict
-
-        # Build sorted_result: categories first, then phase groups, then remaining keys
+        # Build sorted_result: sections first, then phase groups, then remaining keys
         sorted_result = {}
 
-        # Add categories in order of category_prefixes
-        for category in [p.rstrip('_') for p in category_prefixes]:
+        # Emit the config sections in a stable order first
+        for category in ['reactive', 'emulator']:
             if category in result:
                 sorted_result[category] = result[category]
 
@@ -412,6 +397,9 @@ class MF6RTMConfig:
                 'min_concentration': solver_config.get('min_concentration', None),
                 'no_react_cells': solver_config.get('no_react_cells', None),
             }
+            # carry the diffmask threshold through the round-trip when set
+            if 'threshold' in solver_config:
+                kwargs['solver']['threshold'] = solver_config['threshold']
 
         # Flatten everything *except* known sections
         remaining_dict = {k: v for k, v in config_dict.items() if k not in ['reactive', 'solver', 'output',

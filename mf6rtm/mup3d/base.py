@@ -414,6 +414,7 @@ class Mup3d(object):
         self._gwt_sim = None
         self._gwt_name = None
         self._diffusion_coeff = {}
+        self._mst_overrides = {}
 
         # Set grid parameters for DIS
         if all(param is not None for param in [nlay, nrow, ncol]):
@@ -1283,7 +1284,8 @@ class Mup3d(object):
                     )
                     diffc = 0.0
                 dsp_kwargs = dict(diffc=diffc)
-                for attr in ('alh', 'ath1', 'ath2', 'atv'):
+                # xt3d_off/xt3d_rhs are OPTIONS to be carried otherwise get turned on
+                for attr in ('alh', 'ath1', 'ath2', 'atv', 'xt3d_off', 'xt3d_rhs'):
                     pkg_attr = getattr(gwt_ref.dsp, attr, None)
                     if pkg_attr is not None:
                         try:
@@ -1300,13 +1302,16 @@ class Mup3d(object):
                 mst_ref = gwt_ref.mst
                 mst_kwargs = {}
                 for attr in ('porosity', 'decay', 'decay_sorbed', 'bulk_density',
-                             'distcoef', 'sp2', 'first_order_decay', 'zero_order_decay'):
+                             'distcoef', 'sp2', 'first_order_decay', 'zero_order_decay',
+                             'sorption'):
                     pkg_attr = getattr(mst_ref, attr, None)
                     if pkg_attr is not None:
                         try:
                             mst_kwargs[attr] = pkg_attr.get_data()
                         except Exception:
                             pass
+                # sorption is often per-component but the template has one MST; see set_mst_override()
+                mst_kwargs.update(self._mst_overrides.get(component, {}))
                 flopy.mf6.ModflowGwtmst(gwt, filename=f"{component}.mst", **mst_kwargs)
 
             # SSM — rebuilt from aux-type ChemStress objects only
@@ -1614,6 +1619,10 @@ class Mup3d(object):
         """
         yamlfile = self.phreeqcyaml_file
         phreeqcrm_from_yaml = phreeqcrm.InitializeYAML(yamlfile)
+        if phreeqcrm_from_yaml is None:
+            raise RuntimeError(
+                f"PhreeqcRM InitializeYAML failed for '{yamlfile}'."
+            )
         if self.phreeqc_rm is None:
             self.phreeqc_rm = phreeqcrm_from_yaml
         return
@@ -1826,6 +1835,19 @@ class Mup3d(object):
             default to 0 (no diffusion) with a warning at write time.
         """
         self._diffusion_coeff = diffusion_coeff
+
+    def set_mst_override(self, overrides: dict) -> None:
+        """Override MST keyword arguments for specific components (from_mf6 builds).
+
+        Parameters
+        ----------
+        overrides : dict
+            Mapping of component name to ``ModflowGwtmst`` keyword arguments, e.g.
+            ``{'Tmp': {'sorption': 'Linear', 'bulk_density': 1850.0,
+            'distcoef': 2.1141e-4}}``. Keys given here replace values copied from the
+            template; components not listed are unaffected.
+        """
+        self._mst_overrides = overrides
 
     @classmethod
     def from_mf6(cls, sim, solutions, name=None, gwf_name=None, gwt_name=None):
