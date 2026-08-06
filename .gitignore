@@ -75,9 +75,6 @@ instance/
 
 # Sphinx documentation
 docs/_build/
-# Ignore scratch notebooks, but track the executed tutorial notebooks so RTD
-# renders them directly on every branch/tag (rtds_action only ever delivers
-# per-commit CI artifacts for develop/docs branches — never for tags/stable).
 docs/tutorials/*.ipynb
 !docs/tutorials/tutorial01.ipynb
 !docs/tutorials/tutorial02.ipynb

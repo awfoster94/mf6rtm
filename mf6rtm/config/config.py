@@ -243,10 +243,7 @@ class MF6RTMConfig:
             if attr_name.startswith('_'):
                 continue
 
-            # Nested phase attributes (e.g. "equilibrium_phases_si_Calcite").
-            # Section kwargs (reactive/emulator/output/solver) are stored as
-            # nested dicts by _ingest_kwarg and serialized by the dict branch
-            # below, so no flat "<section>_<key>" handling is needed here.
+            # Handle nested phase attributes
             if '_' in attr_name:
                 parts = attr_name.split('_')
                 if len(parts) >= 3 and parts[0] in ['equilibrium', 'kinetic', 'exchange'] and parts[-1] not in ['names']:
