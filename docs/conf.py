@@ -41,18 +41,7 @@ ogp_description_length = 200
 
 # Auto-generate summary tables for modules
 autosummary_generate = True
-
 nb_execution_mode = "off"
-
-# On Read the Docs, pull the CI-executed tutorial notebooks via rtds-action.
-on_rtd = os.environ.get("READTHEDOCS") == "True"
-if on_rtd:
-    extensions.append("rtds_action")
-    rtds_action_github_repo = "p-ortega/mf6rtm"
-    rtds_action_path = "tutorials"
-    rtds_action_artifact_prefix = "notebooks-for-"
-    rtds_action_github_token = os.environ.get("GITHUB_TOKEN", None)
-    rtds_action_error_if_missing = False
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
