@@ -1,0 +1,81 @@
+SOLUTION 1
+   units mol/kgw
+    water 1
+    temp 25.0
+    pH 5.50000e+00
+    pe 1.30000e+01
+    Na 1.19000e-03
+    Cl 1.19000e-03
+
+END
+SOLUTION 2
+   units mol/kgw
+    water 1
+    temp 25.0
+    pH 5.50000e+00
+    pe 1.30000e+01
+    Na 8.00000e-03
+    Cl 8.00000e-03
+
+END
+SOLUTION 3
+   units mol/kgw
+    water 1
+    temp 25.0
+    pH 5.50000e+00
+    pe 1.30000e+01
+    Na 1.19000e-03
+    Cl 1.19000e-03
+
+END
+KINETICS 1
+    Na
+        -formula Na+ 1.0
+        -m 1.95000e-02
+        -tol 1.00000e-12
+END
+
+PRINT
+    -reset false
+END
+
+KNOBS
+    -iterations 1000
+
+RATES
+Na
+-start
+10 km = 0.0001327 # 1/s
+20 kd = 0.01 # L/kg
+30 solids = 2000.0 # kg solids
+40 C = MOL("Na+")
+50 rate = -km * (C - (M / solids) / kd)
+60 moles = rate * TIME
+70 if (M - moles) < 0 then moles = M
+80 SAVE moles
+-end
+
+SELECTED_OUTPUT 1
+    -high_precision true
+    -reset false
+    -solution true
+    -totals Na Cl
+    -molalities Na+ Cl-
+    -step true
+    -ionic_strength true
+    -time true
+    -user_punch true
+
+USER_PUNCH 1
+    -headings time_d cell pH pe Na Cl Na_molal Cl_molal KIN_Na EC_uScm_calc
+10 PUNCH SIM_TIME / 86400
+20 PUNCH CELL_NO
+30 PUNCH -LA("H+")
+40 PUNCH -LA("e-")
+50 PUNCH TOT("Na")
+60 PUNCH TOT("Cl")
+70 PUNCH MOL("Na+")
+80 PUNCH MOL("Cl-")
+90 PUNCH KIN("Na")
+100 PUNCH 1000 * (50.1 * TOT("Na") + 76.3 * TOT("Cl")) # conversion to fluid electrical conductivity in uS per cm
+END

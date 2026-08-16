@@ -74,6 +74,17 @@ class MF6RTMConfig:
                 "min_concentration": None,
                 "no_react_cells": None,
             },
+            "ddmt": {
+                "enabled": False,
+                "mode": "storage",
+                "theta_mobile": None,
+                "theta_immobile": None, 
+                "alpham": None,
+                "immobile_initial": "mobile",
+                "immobile_yaml": None,
+                "output": True,
+                "output_format": "hdf5",
+            },
         }
 
         for section, section_defaults in defaults.items():
@@ -390,8 +401,22 @@ class MF6RTMConfig:
                 'no_react_cells': solver_config.get('no_react_cells', None),
             }
 
+        if "ddmt" in config_dict:
+            ddmt_config = config_dict["ddmt"]
+            kwargs["ddmt"] = {
+                "enabled": ddmt_config.get("enabled", False),
+                "mode": ddmt_config.get("mode", "storage"),
+                "theta_mobile": ddmt_config.get("theta_mobile", None),
+                "theta_immobile": ddmt_config.get("theta_immobile", None),
+                "alpham": ddmt_config.get("alpham", None),
+                "immobile_initial": ddmt_config.get("immobile_initial", "mobile"),
+                "immobile_yaml": ddmt_config.get("immobile_yaml", None),
+                "output": ddmt_config.get("output", True),
+                "output_format": ddmt_config.get("output_format", "hdf5"),
+            }
+
         # Flatten everything *except* known sections
-        remaining_dict = {k: v for k, v in config_dict.items() if k not in ['reactive', 'solver', 'output',
+        remaining_dict = {k: v for k, v in config_dict.items() if k not in ['reactive', 'solver', 'output', 'ddmt',
                                                                             # 'emulator'
                                                                             ]}
         flattened = flatten_dict(remaining_dict)
